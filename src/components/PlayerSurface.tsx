@@ -1,21 +1,34 @@
-import { ChevronDown, ExternalLink, Maximize2, Tv } from "lucide-react";
+import {
+  ChevronDown,
+  ExternalLink,
+  Maximize2,
+  PanelLeftOpen,
+  Square,
+  Tv,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge } from "../lib/bridge";
 import { useApp } from "../store/app";
 import { cn } from "../lib/cn";
 import type { AppSettings } from "../../shared/types";
+import { WebVideoPlayer } from "./WebVideoPlayer";
 
 /**
- * Hosts the player view. When the user has opted into embedded playback,
- * we report this surface's bounds to the main process so mpv stays
- * glued to the rectangle. In `own-window` mode (the default) we render
- * a richer "now playing" placeholder instead — mpv has its own window.
+ * Hosts the player view. Browser mode renders an HTML video element directly
+ * in React. Embedded mpv mode reports this surface's bounds to the main
+ * process so mpv stays glued to the rectangle. In `own-window` mode we render
+ * a richer "now playing" placeholder instead because mpv has its own window.
  */
 export function PlayerSurface() {
   const nowPlaying = useApp((s) => s.nowPlaying);
   const player = useApp((s) => s.player);
+  const setFullscreen = useApp((s) => s.setFullscreen);
+  const collapsed = useApp((s) => s.playerSurfaceCollapsed);
+  const setPlayerSurfaceCollapsed = useApp((s) => s.setPlayerSurfaceCollapsed);
+  const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
+  const toggleSidebar = useApp((s) => s.toggleSidebar);
+  const stop = useApp((s) => s.stop);
   const ref = useRef<HTMLDivElement | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   // Pull settings on mount and again every time a new channel starts
@@ -26,6 +39,7 @@ export function PlayerSurface() {
   }, [nowPlaying?.id]);
 
   const visible = Boolean(nowPlaying) && !collapsed;
+  const web = settings?.playbackMode === "web";
   const embedded = settings?.playbackMode === "embedded";
 
   useLayoutEffect(() => {
@@ -73,10 +87,6 @@ export function PlayerSurface() {
     };
   }, [visible, embedded]);
 
-  useEffect(() => {
-    if (!nowPlaying) setCollapsed(false);
-  }, [nowPlaying]);
-
   if (!nowPlaying) return null;
 
   return (
@@ -90,8 +100,18 @@ export function PlayerSurface() {
       )}
     >
       <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-surface/80 px-4">
+        {sidebarCollapsed && !collapsed && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="btn-ghost"
+            title="Show sidebar and header"
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        )}
         <button
-          onClick={() => setCollapsed(true)}
+          onClick={() => setPlayerSurfaceCollapsed(true)}
           className="btn-ghost"
           title="Minimize"
         >
@@ -119,10 +139,18 @@ export function PlayerSurface() {
             Live
           </span>
         )}
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={stop}
+            className="btn-ghost"
+            title="Stop playback"
+          >
+            <Square size={16} />
+          </button>
+        )}
         <button
-          onClick={() =>
-            void bridge().invoke("player:setFullscreen", true)
-          }
+          onClick={setFullscreen}
           className="btn-ghost"
           title="Fullscreen"
         >
@@ -130,7 +158,11 @@ export function PlayerSurface() {
         </button>
       </div>
 
-      {embedded ? (
+      {web ? (
+        <div className="flex-1 bg-black">
+          <WebVideoPlayer channel={nowPlaying} />
+        </div>
+      ) : embedded ? (
         <div
           ref={ref}
           className="flex-1 bg-black"

@@ -1,3 +1,4 @@
+import { PanelLeftOpen } from "lucide-react";
 import { useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -13,6 +14,9 @@ import { useApp } from "./store/app";
 export function App() {
   const page = useApp((s) => s.page);
   const init = useApp((s) => s.init);
+  const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
+  const toggleSidebar = useApp((s) => s.toggleSidebar);
+  const nowPlaying = useApp((s) => s.nowPlaying);
 
   useEffect(() => {
     void init();
@@ -20,9 +24,9 @@ export function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar />
-      <div className="relative flex flex-1 flex-col">
-        <TopBar />
+      {!sidebarCollapsed && <Sidebar />}
+      <div className="relative flex flex-1 flex-col min-w-0">
+        {!sidebarCollapsed && <TopBar />}
         <main className="relative flex-1 overflow-hidden">
           <div className="h-full overflow-y-auto px-6 pb-32 pt-2">
             {page === "home" && <Home />}
@@ -35,6 +39,16 @@ export function App() {
         </main>
         <MiniPlayer />
       </div>
+      {sidebarCollapsed && !nowPlaying && (
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="no-drag fixed left-3 top-3 z-[60] flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-bg-panel/95 text-text-secondary shadow-card backdrop-blur-md hover:bg-bg-elevated hover:text-text-primary"
+          title="Show sidebar and header"
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+      )}
     </div>
   );
 }

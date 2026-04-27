@@ -40,9 +40,8 @@ export class MpvController extends EventEmitter {
       throw new Error(probe.error ?? "mpv binary not available");
     }
 
-    // We only spin up the embedded player window when the user has
-    // explicitly opted into embedded playback. In own-window mode mpv
-    // creates its own native window — reliable on every platform.
+    // Embedded mpv uses a borderless child window as its native render target.
+    // Browser playback never reaches this controller.
     const wantsEmbed = settings.playbackMode === "embedded";
     const supportsEmbed =
       wantsEmbed &&

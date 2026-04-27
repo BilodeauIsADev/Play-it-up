@@ -135,8 +135,9 @@ export function Settings() {
               <div className="flex gap-2">
                 {(
                   [
+                    { v: "web", label: "Browser player" },
+                    { v: "embedded", label: "Embedded mpv" },
                     { v: "own-window", label: "mpv window" },
-                    { v: "embedded", label: "Embedded (experimental)" },
                   ] as const
                 ).map(({ v, label }) => (
                   <button
@@ -154,9 +155,11 @@ export function Settings() {
                 ))}
               </div>
               <p className="text-[11px] leading-relaxed text-text-muted">
-                {settings?.playbackMode === "embedded"
-                  ? "mpv will draw inside the app's video panel. On Windows this can collide with the Chromium compositor and show audio without video — switch back to mpv window if that happens."
-                  : "mpv plays in its own native window. Most reliable on every platform. Restart playback for changes to take effect."}
+                {settings?.playbackMode === "web"
+                  ? "Uses Chromium's video engine with hls.js inside the app. Best first choice when embedded mpv has sound but no picture."
+                  : settings?.playbackMode === "embedded"
+                    ? "mpv renders into an in-app native video panel. Keep this as a fallback if the browser player cannot decode a stream."
+                    : "mpv plays in its own native window as the broadest compatibility fallback. Restart playback for changes to take effect."}
               </p>
             </div>
           </Field>

@@ -1,5 +1,7 @@
 import {
+  ChevronUp,
   Maximize2,
+  PanelLeftOpen,
   Pause,
   Play,
   Square,
@@ -7,7 +9,6 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useState } from "react";
-import { bridge } from "../lib/bridge";
 import { useApp } from "../store/app";
 import { cn } from "../lib/cn";
 
@@ -16,6 +17,12 @@ export function MiniPlayer() {
   const player = useApp((s) => s.player);
   const togglePlay = useApp((s) => s.togglePlay);
   const stop = useApp((s) => s.stop);
+  const setPlayerVolume = useApp((s) => s.setVolume);
+  const setFullscreen = useApp((s) => s.setFullscreen);
+  const playerSurfaceCollapsed = useApp((s) => s.playerSurfaceCollapsed);
+  const setPlayerSurfaceCollapsed = useApp((s) => s.setPlayerSurfaceCollapsed);
+  const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
+  const toggleSidebar = useApp((s) => s.toggleSidebar);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(80);
 
@@ -46,6 +53,28 @@ export function MiniPlayer() {
           )}
         </div>
 
+        {playerSurfaceCollapsed && (
+          <button
+            type="button"
+            onClick={() => setPlayerSurfaceCollapsed(false)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-bg-elevated text-text-secondary hover:bg-white/10 hover:text-text-primary"
+            title="Show video"
+          >
+            <ChevronUp size={16} />
+          </button>
+        )}
+
+        {sidebarCollapsed && playerSurfaceCollapsed && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-bg-elevated text-text-secondary hover:bg-white/10 hover:text-text-primary"
+            title="Show sidebar and header"
+          >
+            <PanelLeftOpen size={15} />
+          </button>
+        )}
+
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-text-primary">
             {nowPlaying.name}
@@ -63,10 +92,7 @@ export function MiniPlayer() {
           onClick={() => {
             const next = !muted;
             setMuted(next);
-            void bridge().invoke(
-              "player:setVolume",
-              next ? 0 : volume,
-            );
+            setPlayerVolume(next ? 0 : volume);
           }}
           className="rounded-full p-2 text-text-secondary hover:bg-white/5 hover:text-text-primary"
           title={muted ? "Unmute" : "Mute"}
@@ -83,7 +109,7 @@ export function MiniPlayer() {
             const v = Number(e.target.value);
             setVolume(v);
             setMuted(v === 0);
-            void bridge().invoke("player:setVolume", v);
+            setPlayerVolume(v);
           }}
           className="h-1 w-20 cursor-pointer appearance-none rounded-full bg-white/10 accent-accent"
         />
@@ -109,7 +135,7 @@ export function MiniPlayer() {
         </button>
 
         <button
-          onClick={() => void bridge().invoke("player:setFullscreen", true)}
+          onClick={setFullscreen}
           className="rounded-full p-2 text-text-secondary hover:bg-white/5 hover:text-text-primary"
           title="Fullscreen"
         >

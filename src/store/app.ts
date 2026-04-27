@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  AppSettings,
   Channel,
   Category,
   EpgEntry,
@@ -7,12 +8,15 @@ import type {
   Source,
 } from "../../shared/types";
 import { bridge } from "../lib/bridge";
+import { dispatchWebPlayerCommand } from "../lib/webPlayerCommands";
 
 export type Page = "home" | "live" | "favorites" | "search" | "settings";
 
 interface AppState {
   page: Page;
   setPage: (page: Page) => void;
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
 
   sources: Source[];
   activeSourceId: string | null;
@@ -30,6 +34,10 @@ interface AppState {
 
   player: PlayerStatus;
   nowPlaying: Channel | null;
+  playbackMode: AppSettings["playbackMode"] | null;
+  /** When true, the main player overlay is hidden (mini player still visible). */
+  playerSurfaceCollapsed: boolean;
+  setPlayerSurfaceCollapsed: (collapsed: boolean) => void;
 
   init: () => Promise<void>;
   refreshSources: () => Promise<void>;
@@ -38,6 +46,10 @@ interface AppState {
   play: (channel: Channel) => Promise<void>;
   stop: () => void;
   togglePlay: () => void;
+  setVolume: (volume: number) => void;
+  setFullscreen: () => void;
+  setPlayerStatus: (status: PlayerStatus) => void;
+  finishWebPlayback: () => void;
 }
 
 let initialized = false;
@@ -45,6 +57,9 @@ let initialized = false;
 export const useApp = create<AppState>((set, get) => ({
   page: "home",
   setPage: (page) => set({ page }),
+  sidebarCollapsed: false,
+  toggleSidebar: () =>
+    set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
   sources: [],
   activeSourceId: null,
@@ -73,16 +88,28 @@ export const useApp = create<AppState>((set, get) => ({
 
   player: { state: "idle" },
   nowPlaying: null,
+  playbackMode: null,
+  playerSurfaceCollapsed: false,
+  setPlayerSurfaceCollapsed: (collapsed) =>
+    set({ playerSurfaceCollapsed: collapsed }),
 
   init: async () => {
     if (initialized) return;
     initialized = true;
 
     const b = bridge();
-    b.subscribe("player:status", (status) => set({ player: status }));
-    b.subscribe("player:now-playing", (np) =>
-      set({ nowPlaying: np?.channel ?? null }),
-    );
+    b.subscribe("player:status", (status) => {
+      if (get().playbackMode !== "web") set({ player: status });
+    });
+    b.subscribe("player:now-playing", (np) => {
+      if (get().playbackMode !== "web") {
+        set({
+          nowPlaying: np?.channel ?? null,
+          playbackMode: np ? get().playbackMode : null,
+          ...(!np ? { playerSurfaceCollapsed: false } : {}),
+        });
+      }
+    });
     b.subscribe("sources:changed", () => {
       void get().refreshSources();
     });
@@ -161,15 +188,82 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   play: async (channel) => {
-    set({ nowPlaying: channel });
+    const settings = await bridge().invoke("settings:get");
+
+    if (settings.playbackMode === "web") {
+      await bridge().invoke("player:stop");
+      set({
+        nowPlaying: channel,
+        playbackMode: "web",
+        player: { state: "loading", channelId: channel.id },
+        playerSurfaceCollapsed: false,
+      });
+      return;
+    }
+
+    set({
+      nowPlaying: channel,
+      playbackMode: settings.playbackMode,
+      playerSurfaceCollapsed: false,
+    });
     await bridge().invoke("player:play", channel.id);
   },
 
   stop: () => {
+    if (get().playbackMode === "web") {
+      set({
+        nowPlaying: null,
+        playbackMode: null,
+        player: { state: "idle" },
+        playerSurfaceCollapsed: false,
+      });
+      return;
+    }
+
     void bridge().invoke("player:stop");
   },
 
   togglePlay: () => {
+    if (get().playbackMode === "web") {
+      dispatchWebPlayerCommand({ type: "toggle" });
+      return;
+    }
+
     void bridge().invoke("player:toggle");
   },
+
+  setVolume: (volume) => {
+    if (get().playbackMode === "web") {
+      dispatchWebPlayerCommand({ type: "volume", volume });
+      set((s) => ({ player: { ...s.player, volume, muted: volume === 0 } }));
+      return;
+    }
+
+    void bridge().invoke("player:setVolume", volume);
+  },
+
+  setFullscreen: () => {
+    if (get().playbackMode === "web") {
+      if (get().playerSurfaceCollapsed) {
+        set({ playerSurfaceCollapsed: false });
+      }
+      dispatchWebPlayerCommand({ type: "fullscreen" });
+      return;
+    }
+
+    if (get().playerSurfaceCollapsed) {
+      set({ playerSurfaceCollapsed: false });
+    }
+    void bridge().invoke("player:setFullscreen", true);
+  },
+
+  setPlayerStatus: (status) => set({ player: status }),
+
+  finishWebPlayback: () =>
+    set({
+      nowPlaying: null,
+      playbackMode: null,
+      player: { state: "idle" },
+      playerSurfaceCollapsed: false,
+    }),
 }));

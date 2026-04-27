@@ -32,6 +32,11 @@ export interface M3uFileSource extends BaseSource {
 
 export type Source = XtreamSource | M3uUrlSource | M3uFileSource;
 
+export type SourceInput =
+  | Omit<XtreamSource, "id" | "createdAt">
+  | Omit<M3uUrlSource, "id" | "createdAt">
+  | Omit<M3uFileSource, "id" | "createdAt">;
+
 export type StreamKind = "live" | "movie" | "series";
 
 export interface Channel {
@@ -99,11 +104,11 @@ export interface AppSettings {
   cache: "yes" | "no";
   /**
    * Whether to embed the video output inside the app window via mpv's
-   * `--wid`. On Windows this fights Chromium's compositor (mpv's pixels
-   * end up hidden behind Chromium's render surface), so we default to
-   * `own-window` and offer `embedded` as an experimental toggle.
+   * Browser mode uses Chromium's media stack with hls.js for HLS streams.
+   * MPV modes remain as compatibility fallbacks for codecs or stream types
+   * Chromium cannot decode.
    */
-  playbackMode: "embedded" | "own-window";
+  playbackMode: "web" | "embedded" | "own-window";
   /** Extra args passed to mpv. */
   extraArgs?: string[];
 }
@@ -120,7 +125,7 @@ export interface MpvProbeResult {
 
 export type IpcInvokeMap = {
   "sources:list": () => Source[];
-  "sources:add": (input: Omit<Source, "id" | "createdAt">) => Source;
+  "sources:add": (input: SourceInput) => Source;
   "sources:remove": (id: string) => void;
   "sources:test": (id: string) => { ok: boolean; message: string };
 

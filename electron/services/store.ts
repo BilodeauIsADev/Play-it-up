@@ -4,6 +4,7 @@ import path from "node:path";
 import type {
   AppSettings,
   Source,
+  SourceInput,
   XtreamSource,
 } from "../../shared/types";
 
@@ -19,7 +20,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hardwareDecoding: "auto",
   defaultVolume: 80,
   cache: "yes",
-  playbackMode: "own-window",
+  playbackMode: "web",
 };
 
 const SECRET_FIELDS: Record<string, string[]> = {
@@ -79,7 +80,7 @@ class Store {
     return raw ? this.decryptSource(raw) : undefined;
   }
 
-  addSource(input: Omit<Source, "id" | "createdAt">): Source {
+  addSource(input: SourceInput): Source {
     const id = `src_${Date.now().toString(36)}_${Math.random()
       .toString(36)
       .slice(2, 8)}`;
@@ -170,7 +171,7 @@ class Store {
         }
       }
     }
-    return out as Source;
+    return out as unknown as Source;
   }
 
   private decryptSource(src: Source): Source {
@@ -189,7 +190,7 @@ class Store {
         }
       }
     }
-    return out as Source;
+    return out as unknown as Source;
   }
 }
 

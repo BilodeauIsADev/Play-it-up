@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import type {
   Category,
   EpgEntry,
   Source,
+  SourceInput,
   StreamKind,
 } from "../shared/types";
 
@@ -50,6 +51,8 @@ async function createMainWindow(): Promise<void> {
     },
   });
 
+  installMediaCorsHeaders();
+
   mainWindow.once("ready-to-show", () => mainWindow?.show());
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -68,6 +71,25 @@ async function createMainWindow(): Promise<void> {
   mpv.on("status", (status) => {
     mainWindow?.webContents.send("player:status", status);
   });
+}
+
+function installMediaCorsHeaders(): void {
+  session.defaultSession.webRequest.onHeadersReceived(
+    {
+      urls: ["http://*/*", "https://*/*"],
+    },
+    (details, callback) => {
+      const headers = details.responseHeaders ?? {};
+      callback({
+        responseHeaders: {
+          ...headers,
+          "Access-Control-Allow-Origin": ["*"],
+          "Access-Control-Allow-Headers": ["*"],
+          "Access-Control-Allow-Methods": ["GET, HEAD, OPTIONS"],
+        },
+      });
+    },
+  );
 }
 
 function broadcastSourcesChanged(): void {
@@ -148,7 +170,7 @@ function registerIpc(): void {
 
   ipcMain.handle(
     "sources:add",
-    (_, input: Omit<Source, "id" | "createdAt">) => {
+    (_, input: SourceInput) => {
       // Normalize URLs so a user typing `host.example:8080` gets the
       // proper `http://host.example:8080` and the rest of the app never
       // has to second-guess the shape.
