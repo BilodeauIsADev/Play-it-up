@@ -4,6 +4,10 @@ import electron from "vite-plugin-electron/simple";
 import path from "node:path";
 
 export default defineConfig({
+  // Relative asset URLs work with Electron `loadFile(dist/index.html)`.
+  base: "./",
+  // Serve/copy favicon et al. from ./Assets to site root in dev & dist/.
+  publicDir: path.resolve(__dirname, "Assets"),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

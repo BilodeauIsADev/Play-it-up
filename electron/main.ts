@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
+import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,13 +34,20 @@ const channelCache = new Map<
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
+function appIconPath(): string | undefined {
+  const p = path.join(ROOT, "Assets", "Play-it-uplogo.png");
+  return existsSync(p) ? p : undefined;
+}
+
 async function createMainWindow(): Promise<void> {
+  const icon = appIconPath();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 640,
     title: "Play It Up",
+    ...(icon ? { icon } : {}),
     backgroundColor: "#0a0a0c",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     autoHideMenuBar: true,
