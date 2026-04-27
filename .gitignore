@@ -1,0 +1,19 @@
+node_modules
+dist
+dist-electron
+release
+.cache
+.vite
+.DS_Store
+*.log
+
+# Bundled mpv binaries (developers must drop them in themselves; see resources/mpv/README.md).
+resources/mpv/**/mpv
+resources/mpv/**/mpv.exe
+resources/mpv/**/*.dll
+resources/mpv/**/*.dylib
+resources/mpv/**/*.so
+
+# Local env
+.env
+.env.local
