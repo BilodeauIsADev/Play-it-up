@@ -118,7 +118,10 @@ export class MpvController extends EventEmitter {
       // size that fits next to the app.
       args.push(
         "--osc=yes",
-        "--keepaspect-window=no",
+        // Preserve source aspect ratio when users maximize/fullscreen.
+        // This avoids edge cropping from "fill" behavior.
+        "--keepaspect-window=yes",
+        "--panscan=0",
         "--autofit=70%x70%",
         "--title=Play It Up — ${media-title:${filename}}",
       );

@@ -159,13 +159,13 @@ export function PlayerSurface() {
       </div>
 
       {web ? (
-        <div className="flex-1 bg-black">
+        <div className="min-h-0 flex-1 overflow-hidden bg-black">
           <WebVideoPlayer channel={nowPlaying} />
         </div>
       ) : embedded ? (
         <div
           ref={ref}
-          className="flex-1 bg-black"
+          className="min-h-0 flex-1 overflow-hidden bg-black"
           style={{ contain: "strict" }}
         />
       ) : (

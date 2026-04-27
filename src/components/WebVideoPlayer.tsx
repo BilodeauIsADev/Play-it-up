@@ -7,7 +7,16 @@ import {
   type WebPlayerCommand,
 } from "../lib/webPlayerCommands";
 
+/**
+ * Renders an HLS-capable HTML video player.
+ *
+ * Aspect handling is deliberately CSS-first: the video element fills the
+ * available player frame, and `object-fit: contain` makes Chromium letterbox
+ * inside the element. That avoids width-first sizing paths that can crop
+ * 16:9 content on ultrawide monitors.
+ */
 export function WebVideoPlayer({ channel }: { channel: Channel }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const setPlayerStatus = useApp((s) => s.setPlayerStatus);
   const finishWebPlayback = useApp((s) => s.finishWebPlayback);
@@ -19,7 +28,10 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
     let hls: Hls | null = null;
     let disposed = false;
 
-    const setStatus = (state: Parameters<typeof setPlayerStatus>[0]["state"], message?: string) => {
+    const setStatus = (
+      state: Parameters<typeof setPlayerStatus>[0]["state"],
+      message?: string,
+    ) => {
       if (disposed) return;
       setPlayerStatus({
         state,
@@ -45,6 +57,50 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
 
     const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
     const looksLikeHls = /\.m3u8(?:[?#]|$)/i.test(channel.url);
+
+    const onPlaying = () => setStatus("playing");
+    const onWaiting = () => setStatus("buffering");
+    const onPause = () => setStatus("paused");
+    const onEnded = () => finishWebPlayback();
+    const onTimeUpdate = () => {
+      if (!video.paused) setStatus("playing");
+    };
+    const onVolumeChange = () =>
+      setPlayerStatus({
+        state: video.paused ? "paused" : "playing",
+        channelId: channel.id,
+        positionSec: video.currentTime || undefined,
+        durationSec: Number.isFinite(video.duration) ? video.duration : undefined,
+        volume: Math.round(video.volume * 100),
+        muted: video.muted,
+      });
+    const onError = () =>
+      setStatus(
+        "error",
+        video.error?.message ?? "The browser player could not decode this stream.",
+      );
+
+    const onCommand = (event: Event) => {
+      const command = (event as CustomEvent<WebPlayerCommand>).detail;
+      if (command.type === "toggle") {
+        if (video.paused) void play();
+        else video.pause();
+      } else if (command.type === "volume") {
+        video.volume = Math.max(0, Math.min(1, command.volume / 100));
+        video.muted = command.volume === 0;
+      } else if (command.type === "fullscreen") {
+        void (frameRef.current ?? video).requestFullscreen?.();
+      }
+    };
+
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("ended", onEnded);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("volumechange", onVolumeChange);
+    video.addEventListener("error", onError);
+    window.addEventListener(WEB_PLAYER_COMMAND, onCommand);
 
     setStatus("loading");
 
@@ -80,50 +136,6 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
       void play();
     }
 
-    const onPlaying = () => setStatus("playing");
-    const onWaiting = () => setStatus("buffering");
-    const onPause = () => setStatus("paused");
-    const onEnded = () => finishWebPlayback();
-    const onTimeUpdate = () => {
-      if (!video.paused) setStatus("playing");
-    };
-    const onVolumeChange = () =>
-      setPlayerStatus({
-        state: video.paused ? "paused" : "playing",
-        channelId: channel.id,
-        positionSec: video.currentTime || undefined,
-        durationSec: Number.isFinite(video.duration) ? video.duration : undefined,
-        volume: Math.round(video.volume * 100),
-        muted: video.muted,
-      });
-    const onError = () =>
-      setStatus(
-        "error",
-        video.error?.message ?? "The browser player could not decode this stream.",
-      );
-
-    const onCommand = (event: Event) => {
-      const command = (event as CustomEvent<WebPlayerCommand>).detail;
-      if (command.type === "toggle") {
-        if (video.paused) void play();
-        else video.pause();
-      } else if (command.type === "volume") {
-        video.volume = Math.max(0, Math.min(1, command.volume / 100));
-        video.muted = command.volume === 0;
-      } else if (command.type === "fullscreen") {
-        void video.requestFullscreen?.();
-      }
-    };
-
-    video.addEventListener("playing", onPlaying);
-    video.addEventListener("waiting", onWaiting);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("ended", onEnded);
-    video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("volumechange", onVolumeChange);
-    video.addEventListener("error", onError);
-    window.addEventListener(WEB_PLAYER_COMMAND, onCommand);
-
     return () => {
       disposed = true;
       window.removeEventListener(WEB_PLAYER_COMMAND, onCommand);
@@ -142,13 +154,15 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
   }, [channel, finishWebPlayback, setPlayerStatus]);
 
   return (
-    <video
-      ref={videoRef}
-      className="h-full w-full bg-black object-contain"
-      controls
-      playsInline
-      autoPlay
-      poster={channel.logo}
-    />
+    <div ref={frameRef} className="web-player-frame h-full w-full bg-black">
+      <video
+        ref={videoRef}
+        className="web-player-video"
+        controls
+        playsInline
+        autoPlay
+        poster={channel.logo}
+      />
+    </div>
   );
 }
