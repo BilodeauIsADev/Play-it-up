@@ -1,7 +1,6 @@
 import {
   ChevronDown,
   ExternalLink,
-  Maximize2,
   PanelLeftOpen,
   Square,
   Tv,
@@ -22,7 +21,6 @@ import { WebVideoPlayer } from "./WebVideoPlayer";
 export function PlayerSurface() {
   const nowPlaying = useApp((s) => s.nowPlaying);
   const player = useApp((s) => s.player);
-  const setFullscreen = useApp((s) => s.setFullscreen);
   const collapsed = useApp((s) => s.playerSurfaceCollapsed);
   const setPlayerSurfaceCollapsed = useApp((s) => s.setPlayerSurfaceCollapsed);
   const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
@@ -89,17 +87,35 @@ export function PlayerSurface() {
 
   if (!nowPlaying) return null;
 
+  const showChromeAlways =
+    player.state === "loading" ||
+    player.state === "buffering" ||
+    player.state === "error";
+
+  const chromeClass = cn(
+    "absolute left-0 right-0 top-0 z-20 flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-surface/90 px-4 backdrop-blur-md",
+    "transition-[transform,opacity,visibility] duration-200 ease-out",
+    showChromeAlways
+      ? "visible translate-y-0 opacity-100"
+      : cn(
+          "invisible pointer-events-none -translate-y-full opacity-0",
+          "group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100",
+          "group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100",
+          "[@media(hover:none)]:visible [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100",
+        ),
+  );
+
   return (
     <div
       className={cn(
-        "absolute inset-0 z-30 flex flex-col bg-bg-base",
+        "group absolute inset-0 z-30 flex min-h-0 flex-col bg-bg-base",
         "transition-all duration-200",
         collapsed
           ? "pointer-events-none -translate-y-2 opacity-0"
           : "opacity-100",
       )}
     >
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-surface/80 px-4">
+      <div className={chromeClass}>
         {sidebarCollapsed && !collapsed && (
           <button
             type="button"
@@ -149,13 +165,6 @@ export function PlayerSurface() {
             <Square size={16} />
           </button>
         )}
-        <button
-          onClick={setFullscreen}
-          className="btn-ghost"
-          title="Fullscreen"
-        >
-          <Maximize2 size={16} />
-        </button>
       </div>
 
       {web ? (
