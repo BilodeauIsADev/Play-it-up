@@ -16,6 +16,8 @@
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage --publish never",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -63,7 +65,8 @@
         "from": "resources/mpv/${platform}/${arch}",
         "to": "mpv",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/.gitkeep"
         ]
       }
     ],
