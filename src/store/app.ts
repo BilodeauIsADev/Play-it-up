@@ -11,12 +11,18 @@ import { bridge } from "../lib/bridge";
 import { dispatchWebPlayerCommand } from "../lib/webPlayerCommands";
 
 export type Page = "home" | "live" | "favorites" | "search" | "settings";
+export type ChannelViewMode = "grid" | "list";
+export type ChannelSortMode = "none" | "name-asc" | "name-desc";
 
 interface AppState {
   page: Page;
   setPage: (page: Page) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  channelViewMode: ChannelViewMode;
+  setChannelViewMode: (mode: ChannelViewMode) => void;
+  channelSortMode: ChannelSortMode;
+  cycleChannelSortMode: () => void;
 
   sources: Source[];
   activeSourceId: string | null;
@@ -60,6 +66,18 @@ export const useApp = create<AppState>((set, get) => ({
   sidebarCollapsed: false,
   toggleSidebar: () =>
     set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  channelViewMode: "grid",
+  setChannelViewMode: (mode) => set({ channelViewMode: mode }),
+  channelSortMode: "none",
+  cycleChannelSortMode: () =>
+    set((s) => ({
+      channelSortMode:
+        s.channelSortMode === "none"
+          ? "name-asc"
+          : s.channelSortMode === "name-asc"
+            ? "name-desc"
+            : "none",
+    })),
 
   sources: [],
   activeSourceId: null,

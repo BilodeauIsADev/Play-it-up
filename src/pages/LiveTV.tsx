@@ -9,6 +9,7 @@ export function LiveTV() {
   const loading = useApp((s) => s.channelsLoading);
   const error = useApp((s) => s.channelsError);
   const sources = useApp((s) => s.sources);
+  const nowPlaying = useApp((s) => s.nowPlaying);
   const [activeCat, setActiveCat] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -17,6 +18,20 @@ export function LiveTV() {
       (c) => c.groupId === activeCat || c.group === activeCat,
     );
   }, [channels, activeCat]);
+
+  const categoryRows = useMemo(() => {
+    const all = { id: "__all", name: "All", count: channels.length };
+    const rest = categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      count:
+        c.count ??
+        channels.filter(
+          (ch) => ch.groupId === c.id || ch.group === c.id,
+        ).length,
+    }));
+    return [all, ...rest];
+  }, [channels, categories]);
 
   if (sources.length === 0) {
     return (
@@ -27,71 +42,96 @@ export function LiveTV() {
   }
 
   return (
-    <div className="space-y-4 pt-3">
-      <CategoryStrip
-        categories={[
-          { id: "__all", name: "All", count: channels.length },
-          ...categories,
-        ]}
+    <div className="-mx-6 flex h-full min-h-0 items-stretch gap-0 overflow-hidden">
+      <CategorySidebar
+        rows={categoryRows}
         active={activeCat ?? "__all"}
         onSelect={(id) => setActiveCat(id === "__all" ? null : id)}
+        topBarHidden={Boolean(nowPlaying)}
       />
 
-      {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      <div className="min-w-0 flex-1 min-h-0 overflow-y-auto py-1 pb-32 pr-6 pl-4">
+        {error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
 
-      {loading ? (
-        <SkeletonGrid />
-      ) : (
-        <ChannelGrid
-          channels={filtered}
-          emptyMessage="No channels in this category."
-        />
-      )}
+        {loading ? (
+          <SkeletonGrid />
+        ) : (
+          <ChannelGrid
+            channels={filtered}
+            emptyMessage="No channels in this category."
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function CategoryStrip({
-  categories,
+function CategorySidebar({
+  rows,
   active,
   onSelect,
+  topBarHidden,
 }: {
-  categories: { id: string; name: string; count?: number }[];
+  rows: { id: string; name: string; count: number }[];
   active: string;
   onSelect: (id: string) => void;
+  topBarHidden?: boolean;
 }) {
   return (
-    <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
-      {categories.map((c) => (
-        <button
-          key={c.id}
-          onClick={() => onSelect(c.id)}
-          className={cn(
-            "pill border transition-colors",
-            active === c.id
-              ? "border-transparent bg-white text-bg-base"
-              : "border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-panel hover:text-text-primary",
-          )}
+    <div
+      className={cn(
+        "flex w-[220px] shrink-0 flex-col self-start border-r border-border-subtle bg-bg-surface/45",
+        topBarHidden ? "h-screen" : "h-[calc(100dvh-3.5rem)]",
+      )}
+      aria-label="Channel categories"
+    >
+      <div
+        className="sticky top-0 z-[5] flex h-full min-h-0 w-full flex-col"
+      >
+        <div className="label shrink-0 px-2 pb-2 pt-1">
+          Categories
+        </div>
+        <nav
+          className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2 pb-0 [scrollbar-gutter:stable]"
+          role="tablist"
+          aria-label="Filter by category"
         >
-          <span className="truncate max-w-[16rem]">{c.name}</span>
-          {typeof c.count === "number" && (
-            <span
-              className={cn(
-                "rounded-full px-1.5 py-0.5 text-[10px]",
-                active === c.id
-                  ? "bg-black/10 text-bg-base"
-                  : "bg-white/[0.06] text-text-muted",
-              )}
-            >
-              {c.count}
-            </span>
-          )}
-        </button>
-      ))}
+          {rows.map((row) => {
+            const isActive = active === row.id;
+            return (
+              <button
+                key={row.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => onSelect(row.id)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                  isActive
+                    ? "bg-white/[0.08] text-text-primary"
+                    : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums",
+                    isActive
+                      ? "bg-white/15 text-text-primary"
+                      : "bg-white/[0.05] text-text-muted",
+                  )}
+                >
+                  {row.count.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
     </div>
   );
 }

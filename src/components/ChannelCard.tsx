@@ -7,9 +7,10 @@ import type { Channel, EpgEntry } from "../../shared/types";
 interface Props {
   channel: Channel;
   epg?: EpgEntry;
+  viewMode?: "grid" | "list";
 }
 
-function ChannelCardImpl({ channel, epg }: Props) {
+function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
   const play = useApp((s) => s.play);
   // Subscribe to *just* this channel's favorite bit instead of the full
   // Set, so toggling another channel doesn't re-render this card.
@@ -33,15 +34,21 @@ function ChannelCardImpl({ channel, epg }: Props) {
       onClick={() => void play(channel)}
       onKeyDown={onKey}
       className={cn(
-        "group relative flex aspect-[4/3] w-full flex-col overflow-hidden rounded-xl",
+        "group relative flex w-full overflow-hidden rounded-xl",
         "border border-border-subtle bg-bg-panel/80 text-left shadow-card transition-all",
         "cursor-pointer hover:border-border hover:bg-bg-elevated hover:-translate-y-[1px]",
         "hover:shadow-[0_8px_28px_rgba(0,0,0,0.45)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
         "animate-fade-in",
+        viewMode === "grid" ? "aspect-[4/3] flex-col" : "h-[84px] flex-row",
       )}
     >
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1a1a22] to-[#0e0e12]">
+      <div
+        className={cn(
+          "relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#1a1a22] to-[#0e0e12]",
+          viewMode === "grid" ? "flex-1" : "h-full w-[112px] shrink-0",
+        )}
+      >
         {showLogo ? (
           <img
             src={channel.logo}
@@ -81,7 +88,7 @@ function ChannelCardImpl({ channel, epg }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-0.5 px-3 py-2.5">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-3 py-2.5">
         <div className="truncate text-[13px] font-medium text-text-primary">
           {channel.name}
         </div>
@@ -97,6 +104,7 @@ export const ChannelCard = memo(ChannelCardImpl, (prev, next) => {
   return (
     prev.channel === next.channel &&
     prev.epg?.title === next.epg?.title &&
-    prev.epg?.start === next.epg?.start
+    prev.epg?.start === next.epg?.start &&
+    prev.viewMode === next.viewMode
   );
 });

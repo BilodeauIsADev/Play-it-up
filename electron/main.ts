@@ -42,6 +42,7 @@ async function createMainWindow(): Promise<void> {
     title: "Play It Up",
     backgroundColor: "#0a0a0c",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    autoHideMenuBar: true,
     show: false,
     webPreferences: {
       preload: path.join(__dirname_, "preload.mjs"),
@@ -50,6 +51,10 @@ async function createMainWindow(): Promise<void> {
       sandbox: false,
     },
   });
+
+  // Hide native app menu bar (File/Edit/View...) in desktop window.
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.removeMenu?.();
 
   installMediaCorsHeaders();
 
