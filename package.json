@@ -1,7 +1,7 @@
 {
   "name": "play-it-up",
   "productName": "Play It Up",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A modern IPTV player powered by MPV. Supports Xtream Codes and M3U playlists.",
   "main": "dist-electron/main.js",
   "type": "module",
