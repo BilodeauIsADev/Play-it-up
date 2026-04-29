@@ -9,6 +9,7 @@ import {
   Sparkles,
   Trophy,
   Tv,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useEffect,
@@ -16,7 +17,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentType,
   type KeyboardEvent,
 } from "react";
 import { ChannelCard } from "../components/ChannelCard";
@@ -311,7 +311,7 @@ function Hero({ channel, epg }: { channel: Channel; epg?: EpgEntry }) {
  * Generic horizontal channel rail
  * ──────────────────────────────────────────────────────────────────────── */
 interface RailProps {
-  icon: ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   title: string;
   subtitle?: string;
   channels: Channel[];
