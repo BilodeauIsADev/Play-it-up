@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   html,
   body,
   #root {
@@ -13,77 +17,261 @@
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+    color: theme("colors.text.primary");
+    /* Cinematic IPTV ambience: navy + violet bleed over near-black charcoal. */
     background:
       radial-gradient(
-        circle at 20% -10%,
-        rgba(124, 92, 255, 0.10),
-        transparent 45%
+        ellipse 80% 60% at 12% -8%,
+        rgba(91, 140, 255, 0.18),
+        transparent 60%
       ),
       radial-gradient(
-        circle at 110% 110%,
-        rgba(255, 92, 200, 0.08),
-        transparent 50%
+        ellipse 70% 60% at 100% 0%,
+        rgba(140, 92, 255, 0.14),
+        transparent 55%
       ),
-      #0a0a0c;
-    color: theme("colors.text.primary");
+      radial-gradient(
+        ellipse 90% 70% at 50% 110%,
+        rgba(20, 28, 60, 0.55),
+        transparent 60%
+      ),
+      linear-gradient(180deg, #06070b 0%, #05060a 100%);
+    background-attachment: fixed;
   }
 
+  /* Premium thin scrollbars. */
   *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.07);
     border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
+    background-clip: padding-box;
+    border: 2px solid transparent;
   }
 
-  /* Allow drag where we explicitly opt-in. */
+  /* Native title-bar drag region opt-ins. */
   .drag {
     -webkit-app-region: drag;
   }
   .no-drag {
     -webkit-app-region: no-drag;
   }
+
+  ::selection {
+    background: rgba(91, 140, 255, 0.35);
+    color: #fff;
+  }
+}
+
+@layer utilities {
+  /*
+   * Main page scroll (Home / Favorites / Search / Settings): hide the native
+   * vertical scrollbar so it does not reserve a gutter on the right (same
+   * idea as overlay scrollbars). Scrolling still works with wheel, trackpad,
+   * touch, and keyboard. Nested panels keep the global thin scrollbar styles.
+   */
+  .app-main-scroll {
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .app-main-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+  }
 }
 
 @layer components {
+  /* ── Frosted glass surfaces ──────────────────────────────────────────── */
   .glass {
-    background: rgba(20, 20, 26, 0.65);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
-    border: 1px solid theme("colors.border.subtle");
+    background: rgba(18, 22, 32, 0.55);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 12px 32px rgba(0, 0, 0, 0.4);
   }
 
+  .glass-strong {
+    background: rgba(22, 27, 40, 0.78);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  .glass-soft {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-panel {
+    background: linear-gradient(
+      180deg,
+      rgba(22, 27, 40, 0.62) 0%,
+      rgba(14, 17, 26, 0.62) 100%
+    );
+    backdrop-filter: blur(36px) saturate(180%);
+    -webkit-backdrop-filter: blur(36px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Ambient cinematic backdrop layer used behind content surfaces. */
+  .cinema-veil {
+    background:
+      radial-gradient(
+        circle at 25% 20%,
+        rgba(91, 140, 255, 0.18),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 80% 80%,
+        rgba(140, 92, 255, 0.16),
+        transparent 60%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(6, 7, 11, 0.6) 0%,
+        rgba(6, 7, 11, 0.92) 100%
+      );
+  }
+
+  /* ── Pills & buttons ─────────────────────────────────────────────────── */
   .pill {
-    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium;
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium tracking-tight;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-medium tracking-tight
+      transition-all duration-200;
+    transition-timing-function: var(--ease-spring);
   }
 
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent-hover shadow-[0_4px_20px_rgba(124,92,255,0.35)];
+    @apply btn text-white;
+    background: linear-gradient(180deg, #6c97ff 0%, #4f7fff 100%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.25) inset,
+      0 0 0 1px rgba(91, 140, 255, 0.55),
+      0 10px 28px rgba(91, 140, 255, 0.35);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(180deg, #82a8ff 0%, #5e8eff 100%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.35) inset,
+      0 0 0 1px rgba(91, 140, 255, 0.65),
+      0 14px 32px rgba(91, 140, 255, 0.45);
+    transform: translateY(-1px);
+  }
+
+  .btn-cta {
+    @apply btn px-5 py-2.5 text-sm text-white;
+    background: linear-gradient(180deg, #ffffff 0%, #e7e9ef 100%);
+    color: #0a0c12;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 12px 32px rgba(255, 255, 255, 0.18);
+  }
+  .btn-cta:hover {
+    background: linear-gradient(180deg, #ffffff 0%, #f4f5f9 100%);
+    transform: translateY(-1px);
   }
 
   .btn-ghost {
-    @apply btn text-text-secondary hover:bg-white/5 hover:text-text-primary;
+    @apply btn text-text-secondary;
+  }
+  .btn-ghost:hover {
+    color: theme("colors.text.primary");
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .btn-secondary {
-    @apply btn border border-border-subtle bg-bg-elevated text-text-primary hover:bg-bg-panel;
+    @apply btn text-text-primary;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
+  }
+
+  /* Round icon button used in toolbars. */
+  .icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary
+      transition-all duration-200;
+    transition-timing-function: var(--ease-spring);
+  }
+  .icon-btn:hover {
+    color: theme("colors.text.primary");
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .input {
-    @apply w-full rounded-lg border border-border-subtle bg-bg-elevated px-3 py-2 text-sm
-      placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30;
+    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-text-primary
+      placeholder:text-text-muted focus:outline-none transition-colors duration-200;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .input:focus {
+    border-color: rgba(91, 140, 255, 0.55);
+    box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .label {
-    @apply text-xs font-medium uppercase tracking-wide text-text-muted;
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted;
+  }
+
+  /* Quality / category badge used in the hero + cards. */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em];
+    background: rgba(255, 255, 255, 0.10);
+    color: theme("colors.text.primary");
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .badge-live {
+    background: rgba(255, 70, 90, 0.18);
+    color: #ffb1bb;
+    border-color: rgba(255, 70, 90, 0.35);
+  }
+
+  /* Selection / focus glow ring used by the active hero rail item. */
+  .selection-ring {
+    box-shadow:
+      0 0 0 2px rgba(91, 140, 255, 0.85),
+      0 0 0 6px rgba(91, 140, 255, 0.18),
+      0 18px 40px rgba(91, 140, 255, 0.30);
+  }
+
+  /* Horizontal scrolling rail with edge fade. */
+  .rail {
+    scrollbar-width: none;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
   }
 
   /* Keep HLS video aspect-fit in fullscreen/maximized states (no crop). */
@@ -103,6 +291,28 @@
     height: 100vh;
     background: #000;
   }
+
+  /* Fullscreen the whole player surface (video + chrome + mini bar). */
+  .player-surface-root:fullscreen,
+  .player-surface-root:-webkit-full-screen {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    background: #06070b;
+  }
+
+  .player-surface-root:fullscreen .web-player-frame,
+  .player-surface-root:-webkit-full-screen .web-player-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    background: #000;
+  }
   .web-player-video {
     display: block;
     flex: 1 1 auto;
@@ -114,5 +324,29 @@
     max-height: 100%;
     object-fit: contain !important;
     background: #000;
+  }
+}
+
+@layer utilities {
+  /* Soft horizontal mask used on the channel carousels. */
+  .mask-x-fade {
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 32px,
+      #000 calc(100% - 32px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 32px,
+      #000 calc(100% - 32px),
+      transparent 100%
+    );
+  }
+
+  .text-shadow-cinema {
+    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
   }
 }

@@ -1,8 +1,6 @@
 import {
   ChevronDown,
   ExternalLink,
-  PanelLeftOpen,
-  Square,
   Tv,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -10,6 +8,7 @@ import { bridge } from "../lib/bridge";
 import { useApp } from "../store/app";
 import { cn } from "../lib/cn";
 import type { AppSettings } from "../../shared/types";
+import { MiniPlayer } from "./MiniPlayer";
 import { WebVideoPlayer } from "./WebVideoPlayer";
 
 /**
@@ -23,10 +22,8 @@ export function PlayerSurface() {
   const player = useApp((s) => s.player);
   const collapsed = useApp((s) => s.playerSurfaceCollapsed);
   const setPlayerSurfaceCollapsed = useApp((s) => s.setPlayerSurfaceCollapsed);
-  const sidebarCollapsed = useApp((s) => s.sidebarCollapsed);
-  const toggleSidebar = useApp((s) => s.toggleSidebar);
-  const stop = useApp((s) => s.stop);
   const ref = useRef<HTMLDivElement | null>(null);
+  const surfaceRootRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   // Pull settings on mount and again every time a new channel starts
@@ -93,39 +90,41 @@ export function PlayerSurface() {
     player.state === "error";
 
   const chromeClass = cn(
-    "absolute left-0 right-0 top-0 z-20 flex h-12 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg-surface/90 px-4 backdrop-blur-md",
+    "absolute left-0 right-0 top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-4",
+    "border-b border-white/[0.06] bg-bg-glass-strong backdrop-blur-2xl",
     "transition-[transform,opacity,visibility] duration-200 ease-out",
     showChromeAlways
       ? "visible translate-y-0 opacity-100"
       : cn(
           "invisible pointer-events-none -translate-y-full opacity-0",
-          "group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100",
-          "group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100",
+          "group-hover/player-shell:visible group-hover/player-shell:pointer-events-auto group-hover/player-shell:translate-y-0 group-hover/player-shell:opacity-100",
+          "group-hover/player-surface:visible group-hover/player-surface:pointer-events-auto group-hover/player-surface:translate-y-0 group-hover/player-surface:opacity-100",
           "[@media(hover:none)]:visible [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100",
         ),
   );
 
   return (
     <div
+      ref={surfaceRootRef}
       className={cn(
-        "group absolute inset-0 z-30 flex min-h-0 flex-col bg-bg-base",
+        "group/player-surface player-surface-root absolute inset-0 z-30 flex min-h-0 flex-col",
         "transition-all duration-200",
+        // When minimized, only the mini bar should read as "chrome"; the
+        // full-bleed surface would otherwise stay opaque and hide Home/Live.
         collapsed
-          ? "pointer-events-none -translate-y-2 opacity-0"
-          : "opacity-100",
+          ? "pointer-events-none bg-transparent"
+          : "bg-bg-base",
       )}
     >
-      <div className={chromeClass}>
-        {sidebarCollapsed && !collapsed && (
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="btn-ghost"
-            title="Show sidebar and header"
-          >
-            <PanelLeftOpen size={16} />
-          </button>
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col",
+          collapsed
+            ? "pointer-events-none -translate-y-2 opacity-0 [&_*]:pointer-events-none"
+            : "opacity-100",
         )}
+      >
+      <div className={chromeClass}>
         <button
           onClick={() => setPlayerSurfaceCollapsed(true)}
           className="btn-ghost"
@@ -155,21 +154,14 @@ export function PlayerSurface() {
             Live
           </span>
         )}
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={stop}
-            className="btn-ghost"
-            title="Stop playback"
-          >
-            <Square size={16} />
-          </button>
-        )}
       </div>
 
       {web ? (
-        <div className="min-h-0 flex-1 overflow-hidden bg-black">
-          <WebVideoPlayer channel={nowPlaying} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black">
+          <WebVideoPlayer
+            channel={nowPlaying}
+            fullscreenContainerRef={surfaceRootRef}
+          />
         </div>
       ) : embedded ? (
         <div
@@ -184,6 +176,8 @@ export function PlayerSurface() {
           group={nowPlaying.group}
         />
       )}
+      </div>
+      <MiniPlayer />
     </div>
   );
 }
@@ -215,29 +209,31 @@ function OwnWindowPlaceholder({
         />
       )}
       <div className="relative flex max-w-md flex-col items-center text-center">
-        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-border-subtle bg-bg-elevated shadow-card">
+        <div className="glass-strong flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl shadow-card">
           {logo ? (
             <img
               src={logo}
               alt=""
-              className="h-full w-full object-contain p-2"
+              className="h-full w-full object-contain p-3"
               referrerPolicy="no-referrer"
             />
           ) : (
-            <Tv size={22} className="text-text-secondary" />
+            <Tv size={26} className="text-text-secondary" />
           )}
         </div>
-        <div className="mt-4 text-lg font-semibold tracking-tight">
+        <div className="mt-5 text-xl font-semibold tracking-tightest text-text-primary text-shadow-cinema">
           {channelName}
         </div>
         {group && (
-          <div className="mt-1 text-xs text-text-muted">{group}</div>
+          <div className="mt-1 text-[11.5px] uppercase tracking-[0.18em] text-text-muted">
+            {group}
+          </div>
         )}
-        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-border-subtle bg-bg-elevated px-3 py-1.5 text-xs text-text-secondary">
+        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11.5px] text-text-secondary backdrop-blur-xl">
           <ExternalLink size={12} />
           Playing in mpv window
         </div>
-        <p className="mt-3 max-w-xs text-[12px] leading-relaxed text-text-muted">
+        <p className="mt-3 max-w-xs text-[12.5px] leading-relaxed text-text-muted">
           mpv handles playback in its own native window for maximum
           compatibility. Use the floating mini-player below to pause,
           stop, or change channels — controls stay in sync.

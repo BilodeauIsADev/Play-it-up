@@ -86,7 +86,7 @@ export function ChannelGrid({ channels, emptyMessage }: Props) {
         className={
           channelViewMode === "list"
             ? "grid grid-cols-1 gap-2"
-            : "grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3"
+            : "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5"
         }
       >
         {visible.map((c) => (

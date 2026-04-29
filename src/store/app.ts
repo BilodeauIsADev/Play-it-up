@@ -36,6 +36,9 @@ interface AppState {
   favorites: Set<string>;
   toggleFavorite: (channelId: string) => Promise<void>;
 
+  /** Most recently played channels first (for Continue Watching order). */
+  recentChannelIds: string[];
+
   epg: Record<string, EpgEntry | undefined>;
 
   player: PlayerStatus;
@@ -59,6 +62,31 @@ interface AppState {
 }
 
 let initialized = false;
+
+const RECENT_CHANNELS_KEY = "play-it-up-recent-channels";
+
+function loadRecentChannelIds(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_CHANNELS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string");
+  } catch {
+    return [];
+  }
+}
+
+function persistRecentChannelIds(ids: string[]) {
+  try {
+    localStorage.setItem(
+      RECENT_CHANNELS_KEY,
+      JSON.stringify(ids.slice(0, 200)),
+    );
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 export const useApp = create<AppState>((set, get) => ({
   page: "home",
@@ -92,6 +120,7 @@ export const useApp = create<AppState>((set, get) => ({
   channelsError: null,
 
   favorites: new Set<string>(),
+  recentChannelIds: [],
   toggleFavorite: async (channelId) => {
     const isFav = await bridge().invoke("favorites:toggle", channelId);
     set((s) => {
@@ -138,7 +167,10 @@ export const useApp = create<AppState>((set, get) => ({
     });
 
     const favs = await b.invoke("favorites:list");
-    set({ favorites: new Set(favs) });
+    set({
+      favorites: new Set(favs),
+      recentChannelIds: loadRecentChannelIds(),
+    });
 
     await get().refreshSources();
   },
@@ -208,6 +240,14 @@ export const useApp = create<AppState>((set, get) => ({
   play: async (channel) => {
     const settings = await bridge().invoke("settings:get");
 
+    const bumpRecent = () => {
+      const prev = get().recentChannelIds;
+      const without = prev.filter((id) => id !== channel.id);
+      const next = [channel.id, ...without].slice(0, 200);
+      persistRecentChannelIds(next);
+      set({ recentChannelIds: next });
+    };
+
     if (settings.playbackMode === "web") {
       await bridge().invoke("player:stop");
       set({
@@ -216,6 +256,7 @@ export const useApp = create<AppState>((set, get) => ({
         player: { state: "loading", channelId: channel.id },
         playerSurfaceCollapsed: false,
       });
+      bumpRecent();
       return;
     }
 
@@ -224,6 +265,7 @@ export const useApp = create<AppState>((set, get) => ({
       playbackMode: settings.playbackMode,
       playerSurfaceCollapsed: false,
     });
+    bumpRecent();
     await bridge().invoke("player:play", channel.id);
   },
 

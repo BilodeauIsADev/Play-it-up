@@ -1,5 +1,5 @@
 import Hls from "hls.js";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import type { Channel } from "../../shared/types";
 import { useApp } from "../store/app";
 import {
@@ -15,7 +15,84 @@ import {
  * inside the element. That avoids width-first sizing paths that can crop
  * 16:9 content on ultrawide monitors.
  */
-export function WebVideoPlayer({ channel }: { channel: Channel }) {
+function activeFullscreenElement(): Element | null {
+  const d = document as Document & {
+    webkitFullscreenElement?: Element | null;
+    mozFullScreenElement?: Element | null;
+    msFullscreenElement?: Element | null;
+  };
+  return (
+    document.fullscreenElement ??
+    d.webkitFullscreenElement ??
+    d.mozFullScreenElement ??
+    d.msFullscreenElement ??
+    null
+  );
+}
+
+function exitDocumentFullscreen() {
+  const d = document as Document & {
+    webkitExitFullscreen?: () => Promise<void> | void;
+    mozCancelFullScreen?: () => Promise<void> | void;
+    msExitFullscreen?: () => void;
+  };
+  try {
+    const ret =
+      document.exitFullscreen?.() ??
+      d.webkitExitFullscreen?.() ??
+      d.mozCancelFullScreen?.() ??
+      d.msExitFullscreen?.();
+    if (ret != null && typeof (ret as Promise<void>).catch === "function") {
+      void (ret as Promise<void>).catch(() => {});
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function requestFullscreenElement(el: HTMLElement) {
+  const anyEl = el as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+    mozRequestFullScreen?: () => Promise<void> | void;
+    msRequestFullscreen?: () => void;
+  };
+  try {
+    const ret =
+      el.requestFullscreen?.() ??
+      anyEl.webkitRequestFullscreen?.() ??
+      anyEl.mozRequestFullScreen?.() ??
+      anyEl.msRequestFullscreen?.();
+    if (ret != null && typeof (ret as Promise<void>).catch === "function") {
+      void (ret as Promise<void>).catch(() => {});
+    }
+  } catch {
+    /* user gesture / policy */
+  }
+}
+
+function isOurWebPlayerFullscreen(
+  fsEl: Element,
+  opts: {
+    container: HTMLElement | null;
+    frame: HTMLElement | null;
+    video: HTMLVideoElement;
+  },
+): boolean {
+  const { container, frame, video } = opts;
+  if (fsEl === video || fsEl === frame || fsEl === container) return true;
+  if (container?.contains(fsEl)) return true;
+  if (frame?.contains(fsEl)) return true;
+  return false;
+}
+
+export function WebVideoPlayer({
+  channel,
+  fullscreenContainerRef,
+}: {
+  channel: Channel;
+  /** When set, fullscreen includes this subtree (e.g. mini player + video). */
+  fullscreenContainerRef?: RefObject<HTMLElement | null>;
+}) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const setPlayerStatus = useApp((s) => s.setPlayerStatus);
@@ -89,7 +166,18 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
         video.volume = Math.max(0, Math.min(1, command.volume / 100));
         video.muted = command.volume === 0;
       } else if (command.type === "fullscreen") {
-        void (frameRef.current ?? video).requestFullscreen?.();
+        const container = fullscreenContainerRef?.current ?? null;
+        const frame = frameRef.current;
+        const fsEl = activeFullscreenElement();
+        if (
+          fsEl &&
+          isOurWebPlayerFullscreen(fsEl, { container, frame, video })
+        ) {
+          exitDocumentFullscreen();
+          return;
+        }
+        const target = (container ?? frame ?? video) as HTMLElement;
+        requestFullscreenElement(target);
       }
     };
 
@@ -151,17 +239,19 @@ export function WebVideoPlayer({ channel }: { channel: Channel }) {
       video.removeAttribute("src");
       video.load();
     };
-  }, [channel, finishWebPlayback, setPlayerStatus]);
+  }, [channel, finishWebPlayback, fullscreenContainerRef, setPlayerStatus]);
 
   return (
     <div ref={frameRef} className="web-player-frame h-full w-full bg-black">
       <video
         ref={videoRef}
         className="web-player-video"
-        controls
         playsInline
         autoPlay
         poster={channel.logo}
+        disablePictureInPicture
+        controlsList="nodownload noplaybackrate noremoteplayback"
+        onContextMenu={(e) => e.preventDefault()}
       />
     </div>
   );

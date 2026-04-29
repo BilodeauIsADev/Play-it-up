@@ -20,7 +20,7 @@ export function LiveTV() {
   }, [channels, activeCat]);
 
   const categoryRows = useMemo(() => {
-    const all = { id: "__all", name: "All", count: channels.length };
+    const all = { id: "__all", name: "All Channels", count: channels.length };
     const rest = categories.map((c) => ({
       id: c.id,
       name: c.name,
@@ -42,7 +42,7 @@ export function LiveTV() {
   }
 
   return (
-    <div className="-mx-6 flex h-full min-h-0 items-stretch gap-0 overflow-hidden">
+    <div className="-mx-8 flex h-full min-h-0 items-stretch gap-0 overflow-hidden">
       <CategorySidebar
         rows={categoryRows}
         active={activeCat ?? "__all"}
@@ -50,9 +50,9 @@ export function LiveTV() {
         topBarHidden={Boolean(nowPlaying)}
       />
 
-      <div className="min-w-0 flex-1 min-h-0 overflow-y-auto py-1 pb-32 pr-6 pl-4">
+      <div className="min-w-0 flex-1 min-h-0 overflow-y-auto py-1 pb-32 pr-8 pl-6">
         {error && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className="mt-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-xl">
             {error}
           </div>
         )}
@@ -84,19 +84,16 @@ function CategorySidebar({
   return (
     <div
       className={cn(
-        "flex w-[220px] shrink-0 flex-col self-start border-r border-border-subtle bg-bg-surface/45",
+        "flex w-[240px] shrink-0 flex-col self-start",
+        "border-r border-white/[0.05] bg-bg-glass/35 backdrop-blur-2xl",
         topBarHidden ? "h-screen" : "h-[calc(100dvh-3.5rem)]",
       )}
       aria-label="Channel categories"
     >
-      <div
-        className="sticky top-0 z-[5] flex h-full min-h-0 w-full flex-col"
-      >
-        <div className="label shrink-0 px-2 pb-2 pt-1">
-          Categories
-        </div>
+      <div className="sticky top-0 z-[5] flex h-full min-h-0 w-full flex-col">
+        <div className="label shrink-0 px-4 pb-2 pt-3">Categories</div>
         <nav
-          className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2 pb-0 [scrollbar-gutter:stable]"
+          className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2 pb-3 [scrollbar-gutter:stable]"
           role="tablist"
           aria-label="Filter by category"
         >
@@ -110,12 +107,15 @@ function CategorySidebar({
                 aria-selected={isActive}
                 onClick={() => onSelect(row.id)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
+                  "group relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] tracking-tight transition-all duration-200",
                   isActive
                     ? "bg-white/[0.08] text-text-primary"
                     : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
                 )}
               >
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-accent shadow-[0_0_12px_rgba(91,140,255,0.6)]" />
+                )}
                 <span className="min-w-0 flex-1 truncate">{row.name}</span>
                 <span
                   className={cn(
@@ -138,11 +138,11 @@ function CategorySidebar({
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 pt-2">
       {Array.from({ length: 18 }).map((_, i) => (
         <div
           key={i}
-          className="aspect-[4/3] animate-pulse rounded-xl border border-border-subtle bg-gradient-to-br from-white/[0.03] to-transparent"
+          className="aspect-[4/3] animate-pulse rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.04] to-transparent"
         />
       ))}
     </div>

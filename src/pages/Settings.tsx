@@ -40,7 +40,16 @@ export function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pt-3">
+    <div className="mx-auto max-w-3xl space-y-8 pt-6">
+      <header className="px-1">
+        <h1 className="text-2xl font-semibold tracking-tightest text-text-primary">
+          Settings
+        </h1>
+        <p className="mt-1 text-[12.5px] text-text-muted">
+          Sources, playback engine, and privacy.
+        </p>
+      </header>
+
       <Card title="Sources">
         <p className="-mt-1 mb-4 text-sm text-text-secondary">
           Add an Xtream Codes account or an M3U playlist. Credentials are
@@ -430,10 +439,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border-subtle bg-bg-surface/60 p-5">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
-        {title}
-      </h2>
+    <section className="glass-panel rounded-3xl p-6 shadow-glass animate-fade-in">
+      <h2 className="label mb-4">{title}</h2>
       {children}
     </section>
   );
