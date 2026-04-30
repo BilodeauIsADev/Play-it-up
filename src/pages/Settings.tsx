@@ -326,7 +326,7 @@ function AppUpdatesCard() {
 
   const available =
     checkResult?.status === "available" ? checkResult : null;
-  const notesText = formatReleaseNotes(available?.releaseNotes);
+  const notesText = releaseNotesToPlainText(available?.releaseNotes);
 
   return (
     <Card title="Updates">
@@ -426,21 +426,23 @@ function AppUpdatesCard() {
           <summary className="cursor-pointer select-none text-text-primary">
             Release notes
           </summary>
-          <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-text-muted">
+          <div className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-text-muted">
             {notesText}
-          </pre>
+          </div>
         </details>
       )}
     </Card>
   );
 }
 
-function formatReleaseNotes(
+/** Normalize GitHub / electron-updater release notes (incl. HTML) for display. */
+function releaseNotesToPlainText(
   notes: string | string[] | null | undefined,
 ): string {
   if (notes == null) return "";
+  let raw: string;
   if (Array.isArray(notes)) {
-    return notes
+    raw = notes
       .map((block) => {
         if (typeof block === "string") return block;
         if (typeof block === "object" && block !== null && "note" in block) {
@@ -451,8 +453,22 @@ function formatReleaseNotes(
       })
       .filter(Boolean)
       .join("\n\n");
+  } else {
+    raw = typeof notes === "string" ? notes : "";
   }
-  return typeof notes === "string" ? notes : "";
+  raw = raw.trim();
+  if (!raw) return "";
+  if (!/<[a-z][\s/>]/i.test(raw)) return raw;
+  try {
+    const doc = new DOMParser().parseFromString(raw, "text/html");
+    const text = (doc.body.innerText || doc.body.textContent || "").replace(
+      /\u00a0/g,
+      " ",
+    );
+    return text.replace(/\n{3,}/g, "\n\n").trim();
+  } catch {
+    return raw;
+  }
 }
 
 function MpvStatus({
