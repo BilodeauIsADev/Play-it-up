@@ -89,15 +89,6 @@ src/
 shared/
   types.ts             # Shared types + IPC maps
 ```
-
-## Roadmap
-
-- [ ] VOD (movies) for Xtream
-- [ ] Series with episode picker
-- [ ] Full XMLTV EPG + grid enhancements
-- [ ] Catch-up TV (`tv_archive`)
-- [ ] Picture-in-picture / detached mini overlay
-- [ ] Richer macOS in-window video (libmpv render path)
 - [ ] Detachable player window
 
 ## License
