@@ -48,6 +48,10 @@ interface AppState {
   playerSurfaceCollapsed: boolean;
   setPlayerSurfaceCollapsed: (collapsed: boolean) => void;
 
+  /** Set when a newer release exists on GitHub (background check or manual check). */
+  updateNudgeVersion: string | null;
+  clearUpdateNudge: () => void;
+
   init: () => Promise<void>;
   refreshSources: () => Promise<void>;
   loadChannels: (sourceId: string) => Promise<void>;
@@ -140,6 +144,9 @@ export const useApp = create<AppState>((set, get) => ({
   setPlayerSurfaceCollapsed: (collapsed) =>
     set({ playerSurfaceCollapsed: collapsed }),
 
+  updateNudgeVersion: null,
+  clearUpdateNudge: () => set({ updateNudgeVersion: null }),
+
   init: async () => {
     if (initialized) return;
     initialized = true;
@@ -164,6 +171,10 @@ export const useApp = create<AppState>((set, get) => ({
       if (sourceId === get().activeSourceId) {
         set({ channelsLoading: loading });
       }
+    });
+
+    b.subscribe("update:available", ({ version }) => {
+      set({ updateNudgeVersion: version });
     });
 
     const favs = await b.invoke("favorites:list");

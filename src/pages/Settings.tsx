@@ -2,10 +2,12 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Download,
   ExternalLink,
   FolderOpen,
   Plus,
   RefreshCw,
+  RotateCw,
   ShieldCheck,
   Trash2,
   X,
@@ -19,10 +21,12 @@ import type {
   AppSettings,
   MpvProbeResult,
   Source,
+  UpdateCheckResult,
 } from "../../shared/types";
 
 export function Settings() {
   const sources = useApp((s) => s.sources);
+  const clearUpdateNudge = useApp((s) => s.clearUpdateNudge);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [mpv, setMpv] = useState<MpvProbeResult | null>(null);
   const [adding, setAdding] = useState(false);
@@ -32,7 +36,8 @@ export function Settings() {
   useEffect(() => {
     void bridge().invoke("settings:get").then(setSettings);
     void bridge().invoke("mpv:probe").then(setMpv);
-  }, []);
+    clearUpdateNudge();
+  }, [clearUpdateNudge]);
 
   async function patch(p: Partial<AppSettings>) {
     const next = await bridge().invoke("settings:set", p);
@@ -49,6 +54,8 @@ export function Settings() {
           Sources, playback engine, and privacy.
         </p>
       </header>
+
+      <AppUpdatesCard />
 
       <Card title="Sources">
         <p className="-mt-1 mb-4 text-sm text-text-secondary">
@@ -237,6 +244,215 @@ export function Settings() {
       </Card>
     </div>
   );
+}
+
+function AppUpdatesCard() {
+  const [packaged, setPackaged] = useState<boolean | null>(null);
+  const [appVersion, setAppVersion] = useState<string>("");
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<UpdateCheckResult | null>(
+    null,
+  );
+  const [downloading, setDownloading] = useState(false);
+  const [downloadPct, setDownloadPct] = useState(0);
+  const [downloaded, setDownloaded] = useState(false);
+  const [downloadErr, setDownloadErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void bridge()
+      .invoke("update:getState")
+      .then((s) => {
+        setPackaged(s.packaged);
+        setAppVersion(s.version);
+      });
+  }, []);
+
+  useEffect(() => {
+    const b = bridge();
+    const offProg = b.subscribe("update:download-progress", (p) => {
+      setDownloadPct(p.percent);
+    });
+    const offErr = b.subscribe("update:error", ({ message }) => {
+      setDownloadErr(message);
+      setDownloading(false);
+    });
+    return () => {
+      offProg();
+      offErr();
+    };
+  }, []);
+
+  if (packaged === false) {
+    return (
+      <Card title="Updates">
+        <p className="text-sm text-text-muted">
+          In-app updates are available in the packaged desktop build (Windows
+          installer or Linux AppImage from GitHub Releases), not in dev mode.
+        </p>
+      </Card>
+    );
+  }
+
+  if (packaged === null) {
+    return null;
+  }
+
+  async function check() {
+    setChecking(true);
+    setCheckResult(null);
+    setDownloaded(false);
+    setDownloadErr(null);
+    setDownloadPct(0);
+    try {
+      const r = await bridge().invoke("update:check");
+      setCheckResult(r);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function download() {
+    setDownloading(true);
+    setDownloadErr(null);
+    setDownloadPct(0);
+    const r = await bridge().invoke("update:download");
+    setDownloading(false);
+    if (!r.ok) {
+      setDownloadErr(r.message ?? "Download failed.");
+      return;
+    }
+    setDownloaded(true);
+  }
+
+  const available =
+    checkResult?.status === "available" ? checkResult : null;
+  const notesText = formatReleaseNotes(available?.releaseNotes);
+
+  return (
+    <Card title="Updates">
+      <p className="-mt-1 mb-4 text-sm text-text-secondary">
+        New releases are published on GitHub. This build is{" "}
+        <span className="font-mono text-text-primary">v{appVersion}</span>.
+        {bridge().platform === "linux" ? (
+          <>
+            {" "}
+            AppImage updates replace the file in place; keep the app somewhere
+            you can write to (for example your home folder).
+          </>
+        ) : null}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={checking || downloading}
+          onClick={() => void check()}
+        >
+          {checking ? (
+            <>
+              <RefreshCw size={14} className="animate-spin" /> Checking…
+            </>
+          ) : (
+            <>
+              <RotateCw size={14} /> Check for updates
+            </>
+          )}
+        </button>
+        {available && !downloaded && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={downloading}
+            onClick={() => void download()}
+          >
+            {downloading ? (
+              <>
+                <RefreshCw size={14} className="animate-spin" /> Downloading…
+              </>
+            ) : (
+              <>
+                <Download size={14} /> Download v{available.version}
+              </>
+            )}
+          </button>
+        )}
+        {downloaded && (
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => void bridge().invoke("update:install")}
+          >
+            Restart & install
+          </button>
+        )}
+      </div>
+
+      {downloading && (
+        <div className="mt-4">
+          <div className="mb-1 flex justify-between text-[11px] text-text-muted">
+            <span>Downloading update</span>
+            <span>{Math.round(downloadPct)}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300"
+              style={{ width: `${downloadPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {checkResult?.status === "up-to-date" && (
+        <p className="mt-3 text-sm text-emerald-300/90">
+          You are on the latest published version
+          {checkResult.latestRemoteVersion
+            ? ` (${checkResult.latestRemoteVersion} on GitHub)`
+            : ""}
+          .
+        </p>
+      )}
+
+      {checkResult?.status === "error" && (
+        <p className="mt-3 text-sm text-red-300">{checkResult.message}</p>
+      )}
+
+      {downloadErr && (
+        <p className="mt-3 text-sm text-red-300">{downloadErr}</p>
+      )}
+
+      {available && notesText && (
+        <details className="mt-4 rounded-lg border border-border-subtle bg-bg-elevated/40 px-3 py-2 text-sm text-text-secondary">
+          <summary className="cursor-pointer select-none text-text-primary">
+            Release notes
+          </summary>
+          <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-text-muted">
+            {notesText}
+          </pre>
+        </details>
+      )}
+    </Card>
+  );
+}
+
+function formatReleaseNotes(
+  notes: string | string[] | null | undefined,
+): string {
+  if (notes == null) return "";
+  if (Array.isArray(notes)) {
+    return notes
+      .map((block) => {
+        if (typeof block === "string") return block;
+        if (typeof block === "object" && block !== null && "note" in block) {
+          const n = (block as { note?: unknown }).note;
+          return typeof n === "string" ? n : "";
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return typeof notes === "string" ? notes : "";
 }
 
 function MpvStatus({

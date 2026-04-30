@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "hls.js": "^1.6.16",
     "iso8601-duration": "^2.1.2",
     "lucide-react": "^0.474.0",
@@ -86,6 +87,11 @@
         "AppImage"
       ],
       "category": "AudioVideo"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "BilodeauIsADev",
+      "repo": "Play-it-up"
     }
   }
 }

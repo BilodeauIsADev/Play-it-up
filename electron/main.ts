@@ -10,6 +10,7 @@ import { fetchXtreamShortEpg } from "./services/epg";
 import { normalizeServerUrl, normalizeUrl } from "./services/url";
 import { MpvController } from "./mpv/Controller";
 import { probeMpv } from "./mpv/probe";
+import { initAutoUpdater, registerUpdaterIpc, scheduleBackgroundUpdateCheck } from "./updater";
 import type {
   Channel,
   Category,
@@ -179,6 +180,8 @@ function findChannel(channelId: string): Channel | undefined {
 }
 
 function registerIpc(): void {
+  registerUpdaterIpc();
+
   ipcMain.handle("sources:list", () => store.listSources());
 
   ipcMain.handle(
@@ -395,8 +398,10 @@ function registerIpc(): void {
 
 app.whenReady().then(async () => {
   await store.load();
+  initAutoUpdater(() => mainWindow);
   registerIpc();
   await createMainWindow();
+  scheduleBackgroundUpdateCheck();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

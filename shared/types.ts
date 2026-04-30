@@ -159,6 +159,33 @@ export type IpcInvokeMap = {
 
   "mpv:probe": () => MpvProbeResult;
   "mpv:pickBinary": () => MpvProbeResult & { cancelled?: boolean };
+
+  "update:getState": () => UpdateGetStateResult;
+  "update:check": () => Promise<UpdateCheckResult>;
+  "update:download": () => Promise<{ ok: boolean; message?: string }>;
+  "update:install": () => { ok: boolean; message?: string };
+};
+
+export type UpdateGetStateResult = {
+  packaged: boolean;
+  version: string;
+};
+
+export type UpdateCheckResult =
+  | { status: "unpacked" }
+  | { status: "error"; message: string }
+  | { status: "up-to-date"; latestRemoteVersion?: string }
+  | {
+      status: "available";
+      version: string;
+      releaseNotes?: string | string[] | null;
+    };
+
+export type UpdateDownloadProgressPayload = {
+  percent: number;
+  bytesPerSecond: number;
+  total: number;
+  transferred: number;
 };
 
 export type IpcEventMap = {
@@ -166,4 +193,10 @@ export type IpcEventMap = {
   "player:now-playing": NowPlaying | null;
   "sources:changed": void;
   "channels:loading": { sourceId: string; loading: boolean };
+  /** Emitted after a background check finds a newer GitHub release. */
+  "update:available": { version: string };
+  "update:download-progress": UpdateDownloadProgressPayload;
+  /** Update finished downloading; call `update:install` to restart into the new version. */
+  "update:downloaded": void;
+  "update:error": { message: string };
 };

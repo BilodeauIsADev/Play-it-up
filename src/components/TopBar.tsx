@@ -1,6 +1,7 @@
 import {
   ArrowDownUp,
   Compass,
+  Download,
   Heart,
   LayoutGrid,
   List,
@@ -30,6 +31,7 @@ const TABS: TabItem[] = [
 export function TopBar() {
   const page = useApp((s) => s.page);
   const setPage = useApp((s) => s.setPage);
+  const updateNudgeVersion = useApp((s) => s.updateNudgeVersion);
 
   const isHome = page === "home";
 
@@ -101,6 +103,22 @@ export function TopBar() {
 
       {/* Right: contextual actions */}
       <div className="no-drag flex min-w-[200px] items-center justify-end gap-1.5">
+        {updateNudgeVersion && (
+          <button
+            type="button"
+            onClick={() => setPage("settings")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold tracking-tight transition-colors",
+              isHome
+                ? "bg-white/15 text-white hover:bg-white/25"
+                : "bg-accent/20 text-accent hover:bg-accent/30",
+            )}
+            title="Open Settings to download the update"
+          >
+            <Download size={12} className="shrink-0" />
+            v{updateNudgeVersion}
+          </button>
+        )}
         <ContextActions />
       </div>
     </header>

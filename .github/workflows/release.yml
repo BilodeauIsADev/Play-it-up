@@ -41,7 +41,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-nsis
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/latest.yml
           if-no-files-found: error
 
   build-linux:
@@ -71,7 +73,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: release/*.AppImage
+          path: |
+            release/*.AppImage
+            release/latest-linux.yml
           if-no-files-found: error
 
   publish:
@@ -93,5 +97,6 @@ jobs:
           files: |
             release-assets/*.exe
             release-assets/*.AppImage
+            release-assets/*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
