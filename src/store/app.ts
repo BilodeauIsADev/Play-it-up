@@ -17,8 +17,6 @@ export type ChannelSortMode = "none" | "name-asc" | "name-desc";
 interface AppState {
   page: Page;
   setPage: (page: Page) => void;
-  sidebarCollapsed: boolean;
-  toggleSidebar: () => void;
   channelViewMode: ChannelViewMode;
   setChannelViewMode: (mode: ChannelViewMode) => void;
   channelSortMode: ChannelSortMode;
@@ -95,9 +93,6 @@ function persistRecentChannelIds(ids: string[]) {
 export const useApp = create<AppState>((set, get) => ({
   page: "home",
   setPage: (page) => set({ page }),
-  sidebarCollapsed: false,
-  toggleSidebar: () =>
-    set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   channelViewMode: "grid",
   setChannelViewMode: (mode) => set({ channelViewMode: mode }),
   channelSortMode: "none",

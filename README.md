@@ -1,128 +1,104 @@
 # Play It Up
 
-A modern, cross-platform IPTV player powered by [MPV](https://mpv.io).
-Supports **Xtream Codes** accounts and **M3U / M3U8** playlists, with a
-clean dark UI inspired by modern macOS-style media browsers.
+Cross-platform **IPTV** desktop app for **Xtream Codes** and **M3U / M3U8** playlists.  
+Dark, minimal UI with home rails, Live TV by category, favorites, search, and a floating player bar.
 
-> Status: **v0.1** — Live TV, favorites, search, embedded MPV playback,
-> Xtream short-EPG. VOD / Series and full XMLTV EPG are next on the
-> roadmap.
+**Playback:** the default path is **in-app HLS** ([hls.js](https://github.com/video-dev/hls.js/) in Chromium). You can switch in **Settings → Player** to **embedded mpv** (video panel inside the window) or **mpv in its own window** for tricky streams. [mpv](https://mpv.io) is optional but recommended for maximum compatibility.
+
+## Status
+
+Current release line: **v0.2.x** — Live TV, favorites, search, multiple playback modes, Xtream short-EPG, encrypted credentials, and **in-app updates** from GitHub Releases (Windows NSIS + Linux AppImage).
+
+Roadmap highlights: VOD / series for Xtream, richer EPG, catch-up, PiP, tighter macOS embedding.
 
 ## Features
 
-- Xtream Codes accounts (`player_api.php`) and remote / local M3U
-  playlists.
-- Browsing by category with cover-art channel grid.
-- Embedded MPV via `--wid` (Windows / Linux). On macOS MPV gracefully
-  falls back to its own window.
-- Persistent **favorites** and per-source channel cache.
-- "Now playing" short EPG for Xtream sources.
-- Encrypted credential storage via Electron `safeStorage` (uses Keychain
-  on macOS, DPAPI on Windows, libsecret on Linux).
-- Settings: hardware decoding, cache, default volume, custom mpv path.
+- **Sources:** Xtream Codes (`player_api.php`), remote M3U URL, or local M3U file.
+- **Browse:** category sidebar on Live TV, channel grid/list with artwork where available.
+- **Playback:** HLS in the renderer by default; optional mpv (embedded `--wid` on Windows/Linux, separate window where needed).
+- **Favorites** and per-source channel cache.
+- **Short EPG** (“now playing”) for Xtream live channels.
+- **Credentials** encrypted with Electron `safeStorage` (Keychain / DPAPI / libsecret).
+- **Settings:** playback mode, hardware decoding, cache, default volume, custom mpv path, **check for updates**.
 
 ## Tech stack
 
-- **Electron 33** main process
-- **React 18 + TypeScript + Vite 6** renderer
-- **TailwindCSS** for the dark UI system
-- **Zustand** for renderer state
-- **MPV** as the playback engine (JSON IPC over named pipe / unix socket)
+| Layer | Choice |
+|--------|--------|
+| Shell | **Electron 33** |
+| UI | **React 18**, **TypeScript**, **Vite 6**, **Tailwind CSS** |
+| State | **Zustand** |
+| HLS | **hls.js** |
+| Native player | **mpv** (JSON IPC), optional bundled binary under `resources/mpv/` |
 
-## Getting started
+## Requirements
 
-### Prerequisites
+- **Node.js** 20+ (22 LTS used in CI)
+- **mpv** — optional for default HLS mode; required for embedded / own-window mpv modes. Resolution order: bundled `resources/mpv/<platform>/<arch>/` → Settings path → `PATH`. See [resources/mpv/README.md](./resources/mpv/README.md).
 
-- Node.js 20 or newer
-- An MPV binary (the app looks for one in three places, in order):
-  1. **Bundled** — drop a binary into `resources/mpv/<platform>/<arch>/`.
-     See [resources/mpv/README.md](./resources/mpv/README.md).
-  2. **Settings override** — Settings → Player → Custom MPV path.
-  3. **`PATH`** — `mpv` (or `mpv.exe`) available on your shell `PATH`.
-
-### Install & run
+## Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-This launches the Vite dev server **and** Electron. The app window opens
-automatically. Edits to `src/**` hot-reload; edits to `electron/**`
-restart the main process.
+Starts Vite and opens Electron. Renderer changes hot-reload; main/preload changes restart the Electron main process.
 
-### Production build
+### Build installers
 
 ```bash
-npm run dist
+npm run dist          # current OS (from package.json build targets)
+npm run dist:win      # Windows NSIS → release/
+npm run dist:linux    # Linux AppImage → release/
 ```
 
-Produces an installer in `release/` for the current platform via
-`electron-builder` (NSIS on Windows, DMG on macOS, AppImage on Linux).
+Artifacts land in **`release/`**. Release tags on GitHub trigger CI builds and attach binaries plus update metadata (`latest.yml` / `latest-linux.yml`) for the built-in updater.
 
 ## Adding a source
 
-1. Open **Settings**.
-2. Click **Add source**.
-3. Choose **Xtream Codes** or **M3U URL**.
-4. For Xtream, enter `Server URL`, `Username`, `Password`. For M3U, paste
-   the playlist URL.
-5. (Optional) provide an XMLTV EPG URL.
-6. Click **Save source**, then **Test** to verify connectivity.
+1. Open **Settings** → **Add source**.
+2. Choose **Xtream Codes** or **M3U** (URL or file).
+3. Enter server URL + username + password for Xtream, or playlist URL for M3U.
+4. Optional XMLTV URL for EPG.
+5. **Save**, then **Test** to verify.
 
-Click any channel card to play. Use the floating mini-player at the
-bottom of the window to pause, stop, change volume, or go fullscreen.
+Use the **top bar** for Home, Live TV, Favorites, Search, and Settings. The **mini player** at the bottom handles play/pause, volume, and fullscreen.
 
-## How embedded MPV works
+## How embedded mpv fits in
 
-`PlayerSurface` is just a positioned `<div>` in the React tree. Whenever
-its bounding rect changes (resize, scroll, layout), the renderer reports
-the new bounds to the main process, which moves and resizes a borderless
-child `BrowserWindow`. MPV is launched once with `--wid=<HWND>` pointing
-at that child window's native handle, so MPV renders directly into the
-correct rectangle without any compositing overhead.
+In **embedded** mode, a transparent Electron child window hosts mpv with `--wid` aligned to the in-app video region; bounds updates keep mpv glued to the layout. **Own-window** mode spawns mpv separately for the broadest compatibility (especially on macOS where true in-window embedding is limited).
 
-When the player is minimised (the user dismisses the player view), the
-child window is hidden and MPV keeps running in `--idle=yes` so the next
-channel switch is instant.
-
-## Project layout
+## Repository layout
 
 ```
 electron/
-  main.ts              # Main process entry + IPC handlers
-  preload.ts           # contextBridge exposed as window.playitup
-  mpv/
-    Controller.ts      # Spawns mpv, manages lifecycle, status events
-    PlayerWindow.ts    # Borderless child window passed via --wid
-    ipc.ts             # JSON-IPC over named pipe / unix socket
-    probe.ts           # Resolves bundled / settings / PATH mpv
-  services/
-    store.ts           # Encrypted persistent store (sources, favorites)
-    xtream.ts          # Xtream Codes API client
-    m3u.ts             # M3U / M3U8 parser
-    epg.ts             # Short-EPG resolver
+  main.ts              # App entry, IPC, window lifecycle
+  preload.ts           # window.playitup bridge
+  updater.ts           # GitHub Releases auto-update
+  mpv/                 # Controller, JSON-IPC, child window, probe
+  services/            # Encrypted store, Xtream, M3U, EPG helpers
 
 src/
-  App.tsx              # Layout: sidebar + topbar + content + miniplayer
-  components/          # Sidebar, TopBar, MiniPlayer, ChannelCard, ...
+  App.tsx              # Top bar + pages + player surface + mini player
+  components/          # TopBar, ChannelCard, PlayerSurface, …
   pages/               # Home, LiveTV, Favorites, Search, Settings
-  store/app.ts         # Zustand store
-  lib/bridge.ts        # Typed wrapper around window.playitup
+  store/app.ts         # Zustand
+  lib/bridge.ts        # Typed IPC
 
 shared/
-  types.ts             # Types shared between main & renderer
+  types.ts             # Shared types + IPC maps
 ```
 
 ## Roadmap
 
-- [ ] VOD (movies) browsing for Xtream sources
-- [ ] Series / shows with episode picker
-- [ ] Full XMLTV EPG ingestion + scheduled-record indicator
-- [ ] Catch-up TV (Xtream `tv_archive`)
-- [ ] Picture-in-picture / mini overlay
-- [ ] macOS embedded video via libmpv render API
-- [ ] Multi-window / detach player
+- [ ] VOD (movies) for Xtream
+- [ ] Series with episode picker
+- [ ] Full XMLTV EPG + grid enhancements
+- [ ] Catch-up TV (`tv_archive`)
+- [ ] Picture-in-picture / detached mini overlay
+- [ ] Richer macOS in-window video (libmpv render path)
+- [ ] Detachable player window
 
 ## License
 

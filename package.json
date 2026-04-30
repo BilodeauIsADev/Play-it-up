@@ -1,8 +1,8 @@
 {
   "name": "play-it-up",
   "productName": "Play It Up",
-  "version": "0.2.2",
-  "description": "A modern IPTV player powered by MPV. Supports Xtream Codes and M3U playlists.",
+  "version": "0.2.3",
+  "description": "Cross-platform IPTV desktop app for Xtream Codes and M3U playlists (HLS + optional mpv).",
   "main": "dist-electron/main.js",
   "type": "module",
   "author": {
@@ -37,7 +37,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^33.3.1",
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "eslint": "^9.18.0",
     "postcss": "^8.5.0",
@@ -46,6 +46,10 @@
     "vite": "^6.0.7",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "overrides": {
+    "@tootallnate/once": "^3.0.1",
+    "tar": "^7.5.13"
   },
   "build": {
     "appId": "com.playitup.app",

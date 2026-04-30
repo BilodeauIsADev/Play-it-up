@@ -267,17 +267,13 @@ function Hero({ channel, epg }: { channel: Channel; epg?: EpgEntry }) {
               {programLine}
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-white/45">
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles size={12} className="text-white/70" />
-                Powered by MPV
-              </span>
-              {channel.id && (
+            {channel.id && (
+              <div className="mt-4 text-[12.5px] text-white/45">
                 <span className="font-mono uppercase tracking-wider text-white/40">
                   CH · {channel.id.slice(-6)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <button
