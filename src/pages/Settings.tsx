@@ -148,7 +148,7 @@ export function Settings() {
 
           <Field label="Playback mode">
             <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
+              <div className="mac-segmented flex-wrap">
                 {(
                   [
                     { v: "web", label: "Browser player" },
@@ -160,10 +160,8 @@ export function Settings() {
                     key={v}
                     onClick={() => patch({ playbackMode: v })}
                     className={cn(
-                      "pill border transition-colors",
-                      settings?.playbackMode === v
-                        ? "border-transparent bg-white text-bg-base"
-                        : "border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-panel",
+                      "mac-segmented-item px-3 py-1.5",
+                      settings?.playbackMode === v && "mac-segmented-item-active",
                     )}
                   >
                     {label}
@@ -227,7 +225,7 @@ export function Settings() {
               onChange={(e) =>
                 patch({ defaultVolume: Number(e.target.value) })
               }
-              className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-accent"
+              className="range-mac h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10"
             />
           </Field>
         </div>
@@ -671,8 +669,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="glass-panel rounded-3xl p-6 shadow-glass animate-fade-in">
-      <h2 className="label mb-4">{title}</h2>
+    <section className="glass-panel rounded-2xl p-6 animate-fade-in">
+      <h2 className="mb-4 text-[13px] font-semibold text-text-primary">{title}</h2>
       {children}
     </section>
   );
@@ -717,7 +715,7 @@ function SourceRow({
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold uppercase",
             source.kind === "xtream"
-              ? "bg-accent/20 text-accent"
+              ? "bg-white/[0.08] text-white/80"
               : "bg-emerald-500/15 text-emerald-300",
           )}
         >
@@ -843,16 +841,14 @@ function AddSourceForm({
   return (
     <div className="mt-4 rounded-xl border border-border-subtle bg-bg-elevated p-4">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex gap-1.5 rounded-full bg-bg-panel p-1">
+        <div className="mac-segmented">
           {(["xtream", "m3u-url"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setKind(k)}
               className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                kind === k
-                  ? "bg-white text-bg-base"
-                  : "text-text-secondary hover:text-text-primary",
+                "mac-segmented-item px-3 py-1.5",
+                kind === k && "mac-segmented-item-active",
               )}
             >
               {k === "xtream" ? "Xtream Codes" : "M3U URL"}

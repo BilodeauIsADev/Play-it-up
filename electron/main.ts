@@ -1,4 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  protocol,
+  session,
+  shell,
+} from "electron";
 import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -19,6 +27,7 @@ import type {
   SourceInput,
   StreamKind,
 } from "../shared/types";
+import { WINDOW_CHROME } from "../shared/windowChrome";
 
 const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,13 +44,38 @@ const channelCache = new Map<
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "playitup-media",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
+
 function appIconPath(): string | undefined {
   const p = path.join(ROOT, "Assets", "Play-it-uplogo.png");
   return existsSync(p) ? p : undefined;
 }
 
+function applyWinTitleBarOverlay(win: BrowserWindow): void {
+  if (process.platform !== "win32") return;
+  win.setTitleBarOverlay({
+    color: "#1d1d1f00",
+    symbolColor: "#f5f5f7",
+    height: WINDOW_CHROME.titleBarHeight,
+  });
+}
+
 async function createMainWindow(): Promise<void> {
   const icon = appIconPath();
+  const isDarwin = process.platform === "darwin";
+  const isWin32 = process.platform === "win32";
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -49,8 +83,21 @@ async function createMainWindow(): Promise<void> {
     minHeight: 640,
     title: "Play It Up",
     ...(icon ? { icon } : {}),
-    backgroundColor: "#0a0a0c",
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    backgroundColor: "#1d1d1f",
+    titleBarStyle: isDarwin
+      ? "hiddenInset"
+      : isWin32
+        ? "hidden"
+        : "default",
+    ...(isWin32
+      ? {
+          titleBarOverlay: {
+            color: "#1d1d1f00",
+            symbolColor: "#f5f5f7",
+            height: WINDOW_CHROME.titleBarHeight,
+          },
+        }
+      : {}),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -60,6 +107,21 @@ async function createMainWindow(): Promise<void> {
       sandbox: false,
     },
   });
+
+  if (isWin32) {
+    mainWindow.on("enter-full-screen", () => {
+      mainWindow?.setTitleBarOverlay({ height: 0 });
+    });
+    mainWindow.on("leave-full-screen", () => {
+      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+    });
+    mainWindow.on("maximize", () => {
+      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+    });
+    mainWindow.on("unmaximize", () => {
+      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+    });
+  }
 
   // Hide native app menu bar (File/Edit/View...) in desktop window.
   mainWindow.setMenuBarVisibility(false);
@@ -88,6 +150,29 @@ async function createMainWindow(): Promise<void> {
 }
 
 function installMediaCorsHeaders(): void {
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: ["http://*/*", "https://*/*"],
+    },
+    (details, callback) => {
+      if (!isLikelyMediaRequest(details.url, details.resourceType)) {
+        callback({ requestHeaders: details.requestHeaders });
+        return;
+      }
+
+      const requestHeaders = { ...details.requestHeaders };
+      deleteHeader(requestHeaders, "Origin");
+      deleteHeader(requestHeaders, "Referer");
+      deleteHeader(requestHeaders, "Sec-Fetch-Dest");
+      deleteHeader(requestHeaders, "Sec-Fetch-Mode");
+      deleteHeader(requestHeaders, "Sec-Fetch-Site");
+      requestHeaders["User-Agent"] = "VLC/3.0.20 LibVLC/3.0.20";
+      requestHeaders.Accept = "*/*";
+
+      callback({ requestHeaders });
+    },
+  );
+
   session.defaultSession.webRequest.onHeadersReceived(
     {
       urls: ["http://*/*", "https://*/*"],
@@ -104,6 +189,174 @@ function installMediaCorsHeaders(): void {
       });
     },
   );
+}
+
+function installMediaProxy(): void {
+  protocol.handle("playitup-media", async (request) => {
+    const target = decodeMediaProxyUrl(request.url);
+    if (!target) {
+      return new Response("Bad media proxy URL", { status: 400 });
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        Accept: "*/*",
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+      };
+      const range = request.headers.get("range");
+      if (range) headers.Range = range;
+
+      const upstream = await fetch(target, {
+        redirect: "follow",
+        headers,
+      });
+      const responseHeaders = cloneProxyResponseHeaders(upstream.headers);
+
+      if (await isHlsPlaylistResponse(upstream, target)) {
+        const text = await upstream.text();
+        const rewritten = rewriteHlsPlaylist(text, upstream.url || target);
+        responseHeaders.set(
+          "content-type",
+          "application/vnd.apple.mpegurl; charset=utf-8",
+        );
+        responseHeaders.set("cache-control", "no-store");
+        return new Response(rewritten, {
+          status: proxyResponseStatus(upstream.status),
+          statusText: upstream.statusText,
+          headers: responseHeaders,
+        });
+      }
+
+      return new Response(upstream.body, {
+        status: proxyResponseStatus(upstream.status),
+        statusText: upstream.statusText,
+        headers: responseHeaders,
+      });
+    } catch (err) {
+      return new Response(err instanceof Error ? err.message : String(err), {
+        status: 502,
+      });
+    }
+  });
+}
+
+function proxyResponseStatus(status: number): number {
+  return status >= 200 && status <= 599 ? status : 502;
+}
+
+function cloneProxyResponseHeaders(headers: Headers): Headers {
+  const out = new Headers();
+  headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (lower === "content-encoding" || lower === "content-length") return;
+    out.set(key, value);
+  });
+  out.set("access-control-allow-origin", "*");
+  out.set("access-control-allow-headers", "*");
+  out.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  out.set("cache-control", "no-store");
+  return out;
+}
+
+function encodeMediaProxyUrl(target: string): string {
+  const encoded = Buffer.from(target, "utf-8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `playitup-media://fetch/${encoded}`;
+}
+
+function decodeMediaProxyUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const encoded = parsed.pathname.replace(/^\/+/, "");
+    if (!encoded) return undefined;
+    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+    const decoded = Buffer.from(padded + pad, "base64").toString("utf-8");
+    const target = new URL(decoded);
+    if (target.protocol !== "http:" && target.protocol !== "https:") {
+      return undefined;
+    }
+    return target.href;
+  } catch {
+    return undefined;
+  }
+}
+
+async function isHlsPlaylistResponse(
+  response: Response,
+  target: string,
+): Promise<boolean> {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (
+    contentType.includes("mpegurl") ||
+    contentType.includes("vnd.apple.mpegurl")
+  ) {
+    return true;
+  }
+
+  try {
+    return new URL(target).pathname.toLowerCase().endsWith(".m3u8");
+  } catch {
+    return false;
+  }
+}
+
+function rewriteHlsPlaylist(text: string, baseUrl: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => rewriteHlsPlaylistLine(line, baseUrl))
+    .join("\n");
+}
+
+function rewriteHlsPlaylistLine(line: string, baseUrl: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return line;
+
+  if (trimmed.startsWith("#")) {
+    return line.replace(/\bURI="([^"]+)"/g, (_match, uri: string) => {
+      const proxied = proxiedPlaylistUri(uri, baseUrl);
+      return proxied ? `URI="${proxied}"` : `URI="${uri}"`;
+    });
+  }
+
+  return proxiedPlaylistUri(trimmed, baseUrl) ?? line;
+}
+
+function proxiedPlaylistUri(uri: string, baseUrl: string): string | undefined {
+  if (/^(?:data|blob|skd):/i.test(uri)) return undefined;
+  try {
+    return encodeMediaProxyUrl(new URL(uri, baseUrl).href);
+  } catch {
+    return undefined;
+  }
+}
+
+function deleteHeader(
+  headers: Record<string, string>,
+  name: string,
+): void {
+  const hit = Object.keys(headers).find(
+    (key) => key.toLowerCase() === name.toLowerCase(),
+  );
+  if (hit) delete headers[hit];
+}
+
+function isLikelyMediaRequest(url: string, resourceType: string): boolean {
+  if (resourceType !== "xhr" && resourceType !== "media") return false;
+
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    return (
+      path.includes("/live/") ||
+      /\.(?:m3u8|ts|m4s|mp4|aac|key)$/.test(path)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function broadcastSourcesChanged(): void {
@@ -399,6 +652,7 @@ function registerIpc(): void {
 app.whenReady().then(async () => {
   await store.load();
   initAutoUpdater(() => mainWindow);
+  installMediaProxy();
   registerIpc();
   await createMainWindow();
   scheduleBackgroundUpdateCheck();

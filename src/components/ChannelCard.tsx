@@ -32,62 +32,40 @@ function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
       onClick={() => void play(channel)}
       onKeyDown={onKey}
       className={cn(
-        "group relative flex w-full overflow-hidden rounded-2xl text-left",
-        "border border-white/[0.06] bg-bg-glass/60 backdrop-blur-xl",
-        "shadow-card transition-all duration-300 ease-out cursor-pointer",
-        "hover:-translate-y-0.5 hover:border-white/15 hover:bg-bg-glass-strong hover:shadow-card-hover",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+        "group relative flex w-full overflow-hidden rounded-xl text-left",
+        "liquid-glass-card overflow-hidden",
+        "transition-[border-color,box-shadow,transform] duration-200 cursor-pointer",
+        "hover:border-white/20 hover:shadow-card-hover",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
         "animate-fade-in",
-        viewMode === "grid" ? "aspect-[4/3] flex-col" : "h-[88px] flex-row",
+        viewMode === "grid" ? "aspect-[4/3] flex-col" : "h-[84px] flex-row",
       )}
     >
-      {/* Soft accent glow behind on hover */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background:
-            "radial-gradient(60% 60% at 50% 0%, rgba(91,140,255,0.20), transparent 60%)",
-        }}
-      />
-
       <div
         className={cn(
-          "relative flex items-center justify-center overflow-hidden",
-          "bg-gradient-to-br from-cinema-indigo/40 via-cinema-slate to-bg-base",
+          "relative flex items-center justify-center overflow-hidden bg-bg-surface",
           viewMode === "grid"
-            ? "flex-1 border-b border-white/[0.04]"
-            : "h-full w-[120px] shrink-0 border-r border-white/[0.04]",
+            ? "flex-1 border-b border-mac-separator"
+            : "h-full w-[112px] shrink-0 border-r border-mac-separator",
         )}
       >
         {showLogo ? (
           <img
             src={channel.logo}
             alt=""
-            className="max-h-[64%] max-w-[74%] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)] transition-transform duration-500 ease-out group-hover:scale-105"
+            className="max-h-[64%] max-w-[74%] object-contain transition-transform duration-300 ease-out group-hover:scale-[1.03]"
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setImgFailed(true)}
           />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.05] text-text-secondary ring-1 ring-white/[0.06]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-mac-fill text-text-muted">
             <Tv size={18} />
           </div>
         )}
 
-        {/* Hover sheen */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-          style={{
-            background:
-              "linear-gradient(140deg, rgba(255,255,255,0.10) 0%, transparent 30%, transparent 70%, rgba(91,140,255,0.10) 100%)",
-          }}
-        />
-
-        {/* Live pulse */}
-        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-md">
-          <span className="h-1 w-1 animate-pulse-soft rounded-full bg-red-400" />
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+          <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-[#ff453a]" />
           Live
         </span>
 
@@ -97,10 +75,10 @@ function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
             void toggleFav(channel.id);
           }}
           className={cn(
-            "absolute right-2 top-2 rounded-full p-1.5 backdrop-blur-md transition-all",
-            "border border-white/10 bg-black/40 hover:bg-black/60",
+            "absolute right-2 top-2 rounded-lg p-1.5 transition-all",
+            "border border-border-subtle bg-black/40 hover:bg-black/55",
             isFav
-              ? "text-pink-300 opacity-100"
+              ? "text-[#ff375f] opacity-100"
               : "text-white/80 opacity-0 group-hover:opacity-100",
           )}
           title={isFav ? "Remove from favorites" : "Add to favorites"}
@@ -108,18 +86,18 @@ function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
           <Heart size={13} fill={isFav ? "currentColor" : "none"} />
         </button>
 
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-bg-base shadow-[0_8px_24px_rgba(0,0,0,0.55)]">
-            <Play size={18} fill="currentColor" />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-bg-base shadow-card">
+            <Play size={16} fill="currentColor" className="ml-0.5" />
           </div>
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-3.5 py-2.5">
-        <div className="truncate text-[12.5px] font-medium tracking-tight text-text-primary">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-3 py-2.5">
+        <div className="truncate text-[13px] font-medium tracking-tight text-text-primary">
           {channel.name}
         </div>
-        <div className="truncate text-[10.5px] uppercase tracking-[0.14em] text-text-muted">
+        <div className="truncate text-[11px] text-text-muted">
           {epg?.title ?? channel.group ?? "Live"}
         </div>
       </div>

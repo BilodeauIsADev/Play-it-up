@@ -1,5 +1,4 @@
 import {
-  ChevronDown,
   ExternalLink,
   Tv,
 } from "lucide-react";
@@ -21,14 +20,10 @@ export function PlayerSurface() {
   const nowPlaying = useApp((s) => s.nowPlaying);
   const player = useApp((s) => s.player);
   const collapsed = useApp((s) => s.playerSurfaceCollapsed);
-  const setPlayerSurfaceCollapsed = useApp((s) => s.setPlayerSurfaceCollapsed);
   const ref = useRef<HTMLDivElement | null>(null);
   const surfaceRootRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
-  // Pull settings on mount and again every time a new channel starts
-  // playing so toggling the playback mode mid-session takes effect on
-  // the next play.
   useEffect(() => {
     void bridge().invoke("settings:get").then(setSettings);
   }, [nowPlaying?.id]);
@@ -39,8 +34,6 @@ export function PlayerSurface() {
 
   useLayoutEffect(() => {
     if (!embedded) {
-      // Make sure the player window is hidden if the user toggled out
-      // of embedded mode mid-session.
       void bridge().invoke("player:setVisible", false);
       return;
     }
@@ -84,24 +77,10 @@ export function PlayerSurface() {
 
   if (!nowPlaying) return null;
 
-  const showChromeAlways =
+  const showTitlebarChrome =
     player.state === "loading" ||
     player.state === "buffering" ||
     player.state === "error";
-
-  const chromeClass = cn(
-    "absolute left-0 right-0 top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-4",
-    "border-b border-white/[0.06] bg-bg-glass-strong backdrop-blur-2xl",
-    "transition-[transform,opacity,visibility] duration-200 ease-out",
-    showChromeAlways
-      ? "visible translate-y-0 opacity-100"
-      : cn(
-          "invisible pointer-events-none -translate-y-full opacity-0",
-          "group-hover/player-shell:visible group-hover/player-shell:pointer-events-auto group-hover/player-shell:translate-y-0 group-hover/player-shell:opacity-100",
-          "group-hover/player-surface:visible group-hover/player-surface:pointer-events-auto group-hover/player-surface:translate-y-0 group-hover/player-surface:opacity-100",
-          "[@media(hover:none)]:visible [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100",
-        ),
-  );
 
   return (
     <div
@@ -109,8 +88,6 @@ export function PlayerSurface() {
       className={cn(
         "group/player-surface player-surface-root absolute inset-0 z-30 flex min-h-0 flex-col",
         "transition-all duration-200",
-        // When minimized, only the mini bar should read as "chrome"; the
-        // full-bleed surface would otherwise stay opaque and hide Home/Live.
         collapsed
           ? "pointer-events-none bg-transparent"
           : "bg-bg-base",
@@ -124,58 +101,69 @@ export function PlayerSurface() {
             : "opacity-100",
         )}
       >
-      <div className={chromeClass}>
-        <button
-          onClick={() => setPlayerSurfaceCollapsed(true)}
-          className="btn-ghost"
-          title="Minimize"
-        >
-          <ChevronDown size={16} />
-        </button>
-        <div className="text-sm font-medium text-text-primary">
-          {nowPlaying.name}
-        </div>
-        <div className="text-xs text-text-muted">
-          {nowPlaying.group ?? "Live"}
-        </div>
-        <div className="flex-1" />
-        {player.state === "loading" || player.state === "buffering" ? (
-          <span className="pill bg-white/[0.05] text-text-secondary">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-            Buffering
-          </span>
-        ) : player.state === "error" ? (
-          <span className="pill bg-red-500/10 text-red-400">
-            {player.message ?? "Error"}
-          </span>
-        ) : (
-          <span className="pill bg-white/[0.04] text-text-secondary">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Live
-          </span>
-        )}
-      </div>
+        <div className="relative min-h-0 flex-1">
+          {web ? (
+            <div className="absolute inset-0 overflow-hidden bg-black">
+              <WebVideoPlayer
+                channel={nowPlaying}
+                fullscreenContainerRef={surfaceRootRef}
+              />
+            </div>
+          ) : embedded ? (
+            <div
+              ref={ref}
+              className="absolute inset-0 overflow-hidden bg-black"
+              style={{ contain: "strict" }}
+            />
+          ) : (
+            <div className="absolute inset-0">
+              <OwnWindowPlaceholder
+                channelName={nowPlaying.name}
+                logo={nowPlaying.logo}
+                group={nowPlaying.group}
+              />
+            </div>
+          )}
 
-      {web ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black">
-          <WebVideoPlayer
-            channel={nowPlaying}
-            fullscreenContainerRef={surfaceRootRef}
-          />
+          {!collapsed && (
+            <div className="player-titlebar-zone">
+              <header
+                className={cn(
+                  "player-titlebar",
+                  !showTitlebarChrome && "player-titlebar--hidden",
+                )}
+              >
+                <div className="no-drag min-w-0 max-w-[min(42vw,520px)] pl-1">
+                  <div className="truncate text-sm font-medium text-white">
+                    {nowPlaying.name}
+                  </div>
+                  <div className="truncate text-xs text-white/55">
+                    {nowPlaying.group ?? "Live"}
+                  </div>
+                </div>
+                <div
+                  className="player-titlebar-drag min-h-px min-w-8 flex-1"
+                  aria-hidden
+                />
+                {player.state === "loading" || player.state === "buffering" ? (
+                  <span className="no-drag shrink-0 rounded-full bg-black/30 px-2.5 py-1 text-xs text-white/80 backdrop-blur-md">
+                    <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-white/80" />
+                    Buffering
+                  </span>
+                ) : player.state === "error" ? (
+                  <span className="no-drag shrink-0 rounded-full bg-red-500/20 px-2.5 py-1 text-xs text-red-200">
+                    {player.message ?? "Error"}
+                  </span>
+                ) : (
+                  <span className="no-drag shrink-0 rounded-full bg-black/30 px-2.5 py-1 text-xs text-white/80 backdrop-blur-md">
+                    <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Live
+                  </span>
+                )}
+              </header>
+            </div>
+          )}
         </div>
-      ) : embedded ? (
-        <div
-          ref={ref}
-          className="min-h-0 flex-1 overflow-hidden bg-black"
-          style={{ contain: "strict" }}
-        />
-      ) : (
-        <OwnWindowPlaceholder
-          channelName={nowPlaying.name}
-          logo={nowPlaying.logo}
-          group={nowPlaying.group}
-        />
-      )}
       </div>
       <MiniPlayer />
     </div>
@@ -192,7 +180,7 @@ function OwnWindowPlaceholder({
   group?: string;
 }) {
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+    <div className="relative flex h-full items-center justify-center overflow-hidden">
       <div
         className="pointer-events-none absolute inset-0 opacity-40"
         style={{
@@ -221,7 +209,7 @@ function OwnWindowPlaceholder({
             <Tv size={26} className="text-text-secondary" />
           )}
         </div>
-        <div className="mt-5 text-xl font-semibold tracking-tightest text-text-primary text-shadow-cinema">
+        <div className="mt-5 text-xl font-semibold tracking-tightest text-text-primary text-shadow-hero">
           {channelName}
         </div>
         {group && (

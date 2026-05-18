@@ -2,6 +2,7 @@ import type {
   IpcEventMap,
   IpcInvokeMap,
 } from "../../shared/types";
+import type { WindowChromeInfo } from "../../shared/windowChrome";
 
 type InvokeFn = <K extends keyof IpcInvokeMap>(
   channel: K,
@@ -18,6 +19,7 @@ export interface PlayItUpBridge {
   subscribe: SubscribeFn;
   platform: NodeJS.Platform;
   isPackaged: boolean;
+  chrome: WindowChromeInfo;
 }
 
 declare global {

@@ -4,7 +4,16 @@
 
 @layer base {
   :root {
+    --ease-mac: cubic-bezier(0.25, 0.1, 0.25, 1);
     --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --titlebar-height: 56px;
+    --caption-inset: 0px;
+    --traffic-inset: 0px;
+    --glass-tint: rgba(0, 0, 0, 0.22);
+    --glass-tint-soft: rgba(0, 0, 0, 0.16);
+    --glass-tint-header: rgba(0, 0, 0, 0.14);
+    --glass-border: rgba(255, 255, 255, 0.11);
+    --glass-blur: 28px;
   }
 
   html,
@@ -18,30 +27,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "ss01", "cv11";
+    font-feature-settings: "kern" 1;
     color: theme("colors.text.primary");
-    /* Cinematic IPTV ambience: navy + violet bleed over near-black charcoal. */
-    background:
-      radial-gradient(
-        ellipse 80% 60% at 12% -8%,
-        rgba(91, 140, 255, 0.18),
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 70% 60% at 100% 0%,
-        rgba(140, 92, 255, 0.14),
-        transparent 55%
-      ),
-      radial-gradient(
-        ellipse 90% 70% at 50% 110%,
-        rgba(20, 28, 60, 0.55),
-        transparent 60%
-      ),
-      linear-gradient(180deg, #06070b 0%, #05060a 100%);
-    background-attachment: fixed;
+    background-color: #0e0e10;
   }
 
-  /* Premium thin scrollbars. */
   *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -50,18 +40,17 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.2);
     background-clip: padding-box;
     border: 2px solid transparent;
   }
 
-  /* Native title-bar drag region opt-ins. */
   .drag {
     -webkit-app-region: drag;
   }
@@ -70,18 +59,12 @@
   }
 
   ::selection {
-    background: rgba(91, 140, 255, 0.35);
+    background: rgba(255, 255, 255, 0.25);
     color: #fff;
   }
 }
 
 @layer utilities {
-  /*
-   * Main page scroll (Home / Favorites / Search / Settings): hide the native
-   * vertical scrollbar so it does not reserve a gutter on the right (same
-   * idea as overlay scrollbars). Scrolling still works with wheel, trackpad,
-   * touch, and keyboard. Nested panels keep the global thin scrollbar styles.
-   */
   .app-main-scroll {
     scrollbar-gutter: auto;
     scrollbar-width: none;
@@ -97,101 +80,493 @@
 }
 
 @layer components {
-  /* ── Frosted glass surfaces ──────────────────────────────────────────── */
-  .glass {
-    background: rgba(18, 22, 32, 0.55);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  /* ── Wallspace-style dark glass pills ───────────────────────────────── */
+  .glass-pill {
+    background: var(--glass-tint);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    border: 1px solid var(--glass-border);
+    border-radius: 9999px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .glass-pill-nav {
+    @apply inline-flex items-center gap-0.5 p-1;
+    background: var(--glass-tint);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    border: 1px solid var(--glass-border);
+    border-radius: 9999px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .glass-pill-nav-item {
+    @apply inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[13px] font-medium tracking-tight text-white/90
+      transition-all duration-150;
+    transition-timing-function: var(--ease-mac);
+  }
+
+  .glass-pill-nav-item:hover:not(.glass-pill-nav-item-active) {
+    @apply text-white;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-pill-nav-item-active {
+    @apply glass-pill-nav-item bg-white font-semibold text-[#1a1a1c] shadow-[0_2px_8px_rgba(0,0,0,0.2)];
+  }
+
+  .glass-pill-icon {
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full
+      text-white/90 transition-colors duration-150;
+    background: var(--glass-tint);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 6px 24px rgba(0, 0, 0, 0.24);
+    transition-timing-function: var(--ease-mac);
+  }
+
+  .glass-pill-icon:hover {
+    @apply text-white;
+    background: rgba(0, 0, 0, 0.48);
+  }
+
+  /* Floating panels & cards */
+  .liquid-glass,
+  .glass,
+  .glass-strong {
+    background: var(--glass-tint);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 8px 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .liquid-glass-soft,
+  .glass-soft {
+    background: var(--glass-tint-soft);
+    backdrop-filter: blur(24px) saturate(1.12);
+    -webkit-backdrop-filter: blur(24px) saturate(1.12);
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 12px 32px rgba(0, 0, 0, 0.4);
+      0 6px 24px rgba(0, 0, 0, 0.22);
   }
 
-  .glass-strong {
-    background: rgba(22, 27, 40, 0.78);
-    backdrop-filter: blur(32px) saturate(200%);
-    -webkit-backdrop-filter: blur(32px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-  }
-
-  .glass-soft {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(18px) saturate(160%);
-    -webkit-backdrop-filter: blur(18px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
+  .liquid-glass-panel,
   .glass-panel {
+    @apply liquid-glass-soft rounded-2xl p-6;
+  }
+
+  .liquid-glass-card {
+    @apply liquid-glass-soft rounded-2xl;
+  }
+
+  .ambient-backdrop {
+    background-color: #0e0e10;
+    background-image:
+      radial-gradient(
+        ellipse 85% 65% at 18% -5%,
+        rgba(72, 92, 128, 0.42),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 75% 55% at 88% 12%,
+        rgba(108, 82, 62, 0.28),
+        transparent 52%
+      ),
+      radial-gradient(
+        ellipse 95% 75% at 50% 105%,
+        rgba(18, 22, 34, 0.75),
+        transparent 62%
+      ),
+      linear-gradient(180deg, #121316 0%, #0a0a0c 100%);
+  }
+
+  .ambient-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
     background: linear-gradient(
       180deg,
-      rgba(22, 27, 40, 0.62) 0%,
-      rgba(14, 17, 26, 0.62) 100%
+      rgba(0, 0, 0, 0.06) 0%,
+      rgba(0, 0, 0, 0.38) 55%,
+      rgba(0, 0, 0, 0.58) 100%
     );
-    backdrop-filter: blur(36px) saturate(180%);
-    -webkit-backdrop-filter: blur(36px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    pointer-events: none;
   }
 
-  /* Ambient cinematic backdrop layer used behind content surfaces. */
-  .cinema-veil {
+  .mac-veil {
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.08) 0%,
+      rgba(0, 0, 0, 0.42) 55%,
+      rgba(0, 0, 0, 0.62) 100%
+    );
+  }
+
+  /* Home hero — atmospheric spotlight (no full-bleed channel logos) */
+  .hero-spotlight {
+    position: relative;
+    overflow: hidden;
+    background: #121316;
+  }
+
+  .hero-spotlight-glow {
+    position: absolute;
+    inset: -25%;
+    pointer-events: none;
+    transition: opacity 500ms var(--ease-mac);
+  }
+
+  .hero-spotlight[data-theme="default"] .hero-spotlight-glow {
     background:
       radial-gradient(
-        circle at 25% 20%,
-        rgba(91, 140, 255, 0.18),
-        transparent 55%
+        ellipse 72% 58% at 78% 22%,
+        rgba(91, 96, 103, 0.42),
+        transparent 62%
       ),
       radial-gradient(
-        circle at 80% 80%,
-        rgba(140, 92, 255, 0.16),
-        transparent 60%
-      ),
-      linear-gradient(
-        180deg,
-        rgba(6, 7, 11, 0.6) 0%,
-        rgba(6, 7, 11, 0.92) 100%
+        ellipse 58% 48% at 12% 88%,
+        rgba(72, 92, 128, 0.22),
+        transparent 58%
       );
   }
 
-  /* ── Pills & buttons ─────────────────────────────────────────────────── */
+  .hero-spotlight[data-theme="sport"] .hero-spotlight-glow {
+    background:
+      radial-gradient(
+        ellipse 70% 55% at 80% 20%,
+        rgba(52, 120, 92, 0.38),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 55% 45% at 10% 85%,
+        rgba(40, 72, 88, 0.24),
+        transparent 55%
+      );
+  }
+
+  .hero-spotlight[data-theme="news"] .hero-spotlight-glow {
+    background:
+      radial-gradient(
+        ellipse 68% 52% at 76% 24%,
+        rgba(88, 108, 138, 0.36),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 50% 42% at 14% 80%,
+        rgba(58, 68, 88, 0.28),
+        transparent 52%
+      );
+  }
+
+  .hero-spotlight[data-theme="movie"] .hero-spotlight-glow {
+    background:
+      radial-gradient(
+        ellipse 70% 54% at 82% 18%,
+        rgba(128, 88, 62, 0.34),
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 52% 44% at 8% 90%,
+        rgba(72, 58, 78, 0.22),
+        transparent 54%
+      );
+  }
+
+  .hero-spotlight[data-theme="entertainment"] .hero-spotlight-glow {
+    background:
+      radial-gradient(
+        ellipse 68% 52% at 78% 22%,
+        rgba(98, 78, 128, 0.32),
+        transparent 58%
+      ),
+      radial-gradient(
+        ellipse 50% 44% at 12% 86%,
+        rgba(72, 92, 118, 0.2),
+        transparent 52%
+      );
+  }
+
+  .hero-spotlight-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.55) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(
+      ellipse 75% 65% at 72% 35%,
+      black 15%,
+      transparent 72%
+    );
+  }
+
+  .hero-spotlight-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        105deg,
+        rgba(0, 0, 0, 0.5) 0%,
+        rgba(0, 0, 0, 0.12) 48%,
+        transparent 72%
+      ),
+      linear-gradient(
+        0deg,
+        rgba(14, 14, 16, 0.96) 0%,
+        rgba(14, 14, 16, 0.35) 38%,
+        transparent 68%
+      );
+  }
+
+  .hero-emblem {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 11.5rem;
+    height: 11.5rem;
+    flex-shrink: 0;
+  }
+
+  .hero-emblem-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    animation: hero-ring-pulse 5s ease-in-out infinite;
+  }
+
+  .hero-emblem-ring::after {
+    content: "";
+    position: absolute;
+    inset: 1.125rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  @keyframes hero-ring-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.035);
+      opacity: 0.85;
+    }
+  }
+
+  .hero-emblem-card {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    height: 9.25rem;
+    width: 9.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.25rem;
+    padding: 1.25rem;
+    background: rgba(91, 96, 103, 0.38);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 20px 48px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(24px) saturate(1.2);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  }
+
+  .hero-now-card {
+    @apply mt-4 max-w-[11.5rem] rounded-xl border border-white/10 px-3 py-2.5 text-left;
+    background: rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* Title bar: full-width drag region; lighter glass on header pills only */
+  body.integrated-titlebar .titlebar-chrome {
+    min-height: var(--titlebar-height);
+    padding-left: max(1.25rem, var(--traffic-inset));
+    padding-right: max(1.25rem, var(--caption-inset));
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-chrome .glass-pill,
+  .titlebar-chrome .glass-pill-nav {
+    background: var(--glass-tint-header);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 4px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  .titlebar-icon-btn {
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full
+      text-white/85 transition-colors duration-150;
+    -webkit-app-region: no-drag;
+    transition-timing-function: var(--ease-mac);
+  }
+
+  .titlebar-icon-btn:hover {
+    @apply bg-white/10 text-white;
+  }
+
+  .titlebar-icon-btn-active {
+    @apply text-white;
+  }
+
+  /* Player: invisible drag strip + chrome that reveals on hover (like mini player). */
+  .player-titlebar-zone {
+    @apply drag pointer-events-auto absolute inset-x-0 top-0 z-20;
+    height: var(--titlebar-height);
+    padding-left: max(1.25rem, var(--traffic-inset));
+    padding-right: max(1.25rem, var(--caption-inset));
+    -webkit-app-region: drag;
+  }
+
+  .player-titlebar {
+    @apply flex h-full w-full items-center gap-3;
+    -webkit-app-region: no-drag;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.55) 0%,
+      rgba(0, 0, 0, 0.2) 70%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    transition:
+      opacity 200ms var(--ease-mac),
+      transform 200ms var(--ease-mac),
+      visibility 200ms var(--ease-mac);
+  }
+
+  .player-titlebar--hidden {
+    @apply invisible -translate-y-2 opacity-0 pointer-events-none;
+  }
+
+  .group-hover\/player-shell .player-titlebar--hidden,
+  .group-hover\/player-surface .player-titlebar--hidden {
+    @apply visible translate-y-0 opacity-100 pointer-events-auto;
+  }
+
+  @media (hover: none) {
+    .player-titlebar--hidden {
+      @apply visible translate-y-0 opacity-100 pointer-events-auto;
+    }
+  }
+
+  .player-titlebar .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .player-titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  /* Settings / toggles — same nav pill pattern */
+  .mac-segmented {
+    @apply glass-pill-nav;
+  }
+
+  .mac-segmented-item {
+    @apply glass-pill-nav-item px-3 py-1.5 text-[12px];
+  }
+
+  .mac-segmented-item-active {
+    @apply rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1a1a1c] shadow-[0_2px_8px_rgba(0,0,0,0.2)];
+  }
+
+  .mac-sidebar {
+    background: var(--glass-tint-soft);
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.12);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.12);
+    border-right: 1px solid var(--glass-border);
+  }
+
+  .mac-list-row {
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium tracking-tight
+      text-text-secondary transition-colors duration-150;
+  }
+
+  .mac-list-row:hover {
+    @apply bg-white/[0.05] text-text-primary;
+  }
+
+  .mac-list-row-active {
+    @apply mac-list-row bg-white/[0.12] text-white;
+  }
+
+  /* Legacy alias kept for gradual migration. */
+  .cinema-veil {
+    @apply mac-veil;
+  }
+
+  /* ── Controls ────────────────────────────────────────────────────────── */
   .pill {
-    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium tracking-tight;
+    @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium tracking-tight;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-medium tracking-tight
-      transition-all duration-200;
-    transition-timing-function: var(--ease-spring);
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-tight
+      transition-all duration-150;
+    transition-timing-function: var(--ease-mac);
   }
 
   .btn-primary {
-    @apply btn text-white;
-    background: linear-gradient(180deg, #6c97ff 0%, #4f7fff 100%);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.25) inset,
-      0 0 0 1px rgba(91, 140, 255, 0.55),
-      0 10px 28px rgba(91, 140, 255, 0.35);
+    @apply btn font-semibold text-[#1a1a1c];
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
   }
   .btn-primary:hover {
-    background: linear-gradient(180deg, #82a8ff 0%, #5e8eff 100%);
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.35) inset,
-      0 0 0 1px rgba(91, 140, 255, 0.65),
-      0 14px 32px rgba(91, 140, 255, 0.45);
-    transform: translateY(-1px);
+    background: #fff;
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .player-play-btn {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all duration-150;
+    background: rgba(255, 255, 255, 0.92);
+    color: #1a1a1c;
+  }
+  .player-play-btn:hover {
+    background: #fff;
+  }
+  .player-play-btn:active {
+    transform: scale(0.95);
+  }
+
+  .range-mac {
+    accent-color: rgba(255, 255, 255, 0.85);
   }
 
   .btn-cta {
-    @apply btn px-5 py-2.5 text-sm text-white;
-    background: linear-gradient(180deg, #ffffff 0%, #e7e9ef 100%);
-    color: #0a0c12;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.9) inset,
-      0 12px 32px rgba(255, 255, 255, 0.18);
+    @apply btn px-5 py-2.5 text-sm font-semibold text-white;
+    background: rgba(255, 255, 255, 0.92);
+    color: #1d1d1f;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
   }
   .btn-cta:hover {
-    background: linear-gradient(180deg, #ffffff 0%, #f4f5f9 100%);
-    transform: translateY(-1px);
+    background: #fff;
+  }
+  .btn-cta:active {
+    transform: scale(0.98);
   }
 
   .btn-ghost {
@@ -204,22 +579,17 @@
 
   .btn-secondary {
     @apply btn text-text-primary;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    background: theme("colors.mac.fill");
+    border: 0.5px solid theme("colors.border.subtle");
   }
   .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.10);
-    border-color: rgba(255, 255, 255, 0.18);
-    transform: translateY(-1px);
+    background: theme("colors.mac.selected");
   }
 
-  /* Round icon button used in toolbars. */
   .icon-btn {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-full text-text-secondary
-      transition-all duration-200;
-    transition-timing-function: var(--ease-spring);
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary
+      transition-colors duration-150;
+    transition-timing-function: var(--ease-mac);
   }
   .icon-btn:hover {
     color: theme("colors.text.primary");
@@ -227,46 +597,44 @@
   }
 
   .input {
-    @apply w-full rounded-xl px-3.5 py-2.5 text-sm text-text-primary
-      placeholder:text-text-muted focus:outline-none transition-colors duration-200;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    @apply w-full rounded-lg px-3 py-2 text-[13px] text-text-primary
+      placeholder:text-text-muted focus:outline-none transition-colors duration-150;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   }
   .input:focus {
-    border-color: rgba(91, 140, 255, 0.55);
-    box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.16);
-    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.12),
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
   }
 
   .label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted;
+    @apply text-[11px] font-medium text-text-muted;
   }
 
-  /* Quality / category badge used in the hero + cards. */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em];
-    background: rgba(255, 255, 255, 0.10);
+    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-medium;
+    background: rgba(255, 255, 255, 0.1);
     color: theme("colors.text.primary");
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
   }
 
   .badge-live {
-    background: rgba(255, 70, 90, 0.18);
-    color: #ffb1bb;
-    border-color: rgba(255, 70, 90, 0.35);
+    background: rgba(255, 59, 48, 0.18);
+    color: #ff9f9a;
+    border-color: rgba(255, 59, 48, 0.35);
   }
 
-  /* Selection / focus glow ring used by the active hero rail item. */
   .selection-ring {
     box-shadow:
-      0 0 0 2px rgba(91, 140, 255, 0.85),
-      0 0 0 6px rgba(91, 140, 255, 0.18),
-      0 18px 40px rgba(91, 140, 255, 0.30);
+      0 0 0 2px rgba(255, 255, 255, 0.5),
+      0 0 0 5px rgba(255, 255, 255, 0.12);
   }
 
-  /* Horizontal scrolling rail with edge fade. */
   .rail {
     scrollbar-width: none;
   }
@@ -274,7 +642,6 @@
     display: none;
   }
 
-  /* Keep HLS video aspect-fit in fullscreen/maximized states (no crop). */
   .web-player-frame {
     display: flex;
     align-items: center;
@@ -292,7 +659,6 @@
     background: #000;
   }
 
-  /* Fullscreen the whole player surface (video + chrome + mini bar). */
   .player-surface-root:fullscreen,
   .player-surface-root:-webkit-full-screen {
     display: flex;
@@ -300,7 +666,7 @@
     width: 100%;
     height: 100%;
     max-height: 100%;
-    background: #06070b;
+    background: #1d1d1f;
   }
 
   .player-surface-root:fullscreen .web-player-frame,
@@ -328,7 +694,6 @@
 }
 
 @layer utilities {
-  /* Soft horizontal mask used on the channel carousels. */
   .mask-x-fade {
     -webkit-mask-image: linear-gradient(
       90deg,
@@ -346,7 +711,12 @@
     );
   }
 
+  .text-shadow-hero {
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Legacy alias */
   .text-shadow-cinema {
-    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+    @apply text-shadow-hero;
   }
 }

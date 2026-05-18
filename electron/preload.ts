@@ -1,4 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { getWindowChromeInfo } from "../shared/windowChrome";
+
+const chrome = getWindowChromeInfo(process.platform);
 
 contextBridge.exposeInMainWorld("playitup", {
   invoke: (channel: string, ...args: unknown[]) =>
@@ -11,4 +14,5 @@ contextBridge.exposeInMainWorld("playitup", {
   },
   platform: process.platform,
   isPackaged: process.env.NODE_ENV !== "development",
+  chrome,
 });

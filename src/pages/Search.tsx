@@ -22,7 +22,7 @@ export function Search() {
   return (
     <div className="space-y-6 pt-6">
       <div className="mx-auto max-w-3xl">
-        <label className="glass-strong flex items-center gap-3 rounded-2xl px-5 py-4">
+        <label className="glass-pill flex items-center gap-3 rounded-full px-5 py-2.5 focus-within:ring-2 focus-within:ring-white/20">
           <SearchIcon size={18} className="text-text-secondary" />
           <input
             autoFocus

@@ -7,6 +7,16 @@ import {
   type WebPlayerCommand,
 } from "../lib/webPlayerCommands";
 
+type HlsNetworkErrorData = {
+  details?: string;
+  error?: Error;
+  response?: {
+    code?: number;
+    text?: string;
+    url?: string;
+  };
+};
+
 /**
  * Renders an HLS-capable HTML video player.
  *
@@ -85,6 +95,31 @@ function isOurWebPlayerFullscreen(
   return false;
 }
 
+function hlsNetworkMessage(data: HlsNetworkErrorData): string {
+  const code = data.response?.code;
+  const text = data.response?.text;
+  if (code) {
+    return `Stream request failed: HTTP ${code}${text ? ` ${text}` : ""}`;
+  }
+  return data.error?.message ?? data.details ?? "Stream network error";
+}
+
+function isPermanentHttpFailure(data: HlsNetworkErrorData): boolean {
+  const code = data.response?.code;
+  return code != null && code >= 400 && code < 500;
+}
+
+function mediaProxyUrl(url: string): string {
+  const bytes = new TextEncoder().encode(url);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const encoded = btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `playitup-media://fetch/${encoded}`;
+}
+
 export function WebVideoPlayer({
   channel,
   fullscreenContainerRef,
@@ -104,6 +139,9 @@ export function WebVideoPlayer({
 
     let hls: Hls | null = null;
     let disposed = false;
+    let startupTimer: number | undefined;
+    let networkRecoveries = 0;
+    let mediaRecoveries = 0;
 
     const setStatus = (
       state: Parameters<typeof setPlayerStatus>[0]["state"],
@@ -134,6 +172,7 @@ export function WebVideoPlayer({
 
     const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
     const looksLikeHls = /\.m3u8(?:[?#]|$)/i.test(channel.url);
+    const playbackUrl = looksLikeHls ? mediaProxyUrl(channel.url) : channel.url;
 
     const onPlaying = () => setStatus("playing");
     const onWaiting = () => setStatus("buffering");
@@ -192,37 +231,57 @@ export function WebVideoPlayer({
 
     setStatus("loading");
 
-    if (looksLikeHls && Hls.isSupported()) {
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-      });
-      hls.attachMedia(video);
-      hls.loadSource(channel.url);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    startupTimer = window.setTimeout(() => {
+      if (disposed) return;
+
+      if (looksLikeHls && Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          liveSyncDurationCount: 2,
+          maxLiveSyncPlaybackRate: 1.5,
+        });
+        hls.attachMedia(video);
+        hls.loadSource(playbackUrl);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          void play();
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (!data.fatal) return;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            if (isPermanentHttpFailure(data)) {
+              setStatus("error", hlsNetworkMessage(data));
+              return;
+            }
+            if (networkRecoveries >= 2) {
+              setStatus("error", hlsNetworkMessage(data));
+              return;
+            }
+            networkRecoveries += 1;
+            hls?.startLoad();
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            if (mediaRecoveries >= 1) {
+              setStatus("error", data.error?.message ?? data.details);
+              return;
+            }
+            mediaRecoveries += 1;
+            hls?.recoverMediaError();
+            return;
+          }
+          setStatus("error", data.error?.message ?? data.details);
+        });
+      } else if (looksLikeHls && canUseNative) {
+        video.src = playbackUrl;
+        video.addEventListener("loadedmetadata", () => void play(), {
+          once: true,
+        });
+      } else {
+        video.src = playbackUrl;
         void play();
-      });
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          hls?.startLoad();
-          return;
-        }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls?.recoverMediaError();
-          return;
-        }
-        setStatus("error", data.error?.message ?? data.details);
-      });
-    } else if (looksLikeHls && canUseNative) {
-      video.src = channel.url;
-      video.addEventListener("loadedmetadata", () => void play(), {
-        once: true,
-      });
-    } else {
-      video.src = channel.url;
-      void play();
-    }
+      }
+    }, 0);
 
     return () => {
       disposed = true;
@@ -234,6 +293,7 @@ export function WebVideoPlayer({
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("volumechange", onVolumeChange);
       video.removeEventListener("error", onError);
+      if (startupTimer !== undefined) window.clearTimeout(startupTimer);
       hls?.destroy();
       video.pause();
       video.removeAttribute("src");

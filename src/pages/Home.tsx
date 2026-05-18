@@ -160,146 +160,160 @@ export function Home() {
 /* ─────────────────────────────────────────────────────────────────────────
  * Hero
  * ──────────────────────────────────────────────────────────────────────── */
+type HeroTheme = "default" | "sport" | "news" | "movie" | "entertainment";
+
+function heroThemeFromGroup(group?: string): HeroTheme {
+  const g = (group ?? "").toLowerCase();
+  if (/sport|espn|nfl|nba|football|soccer|mlb|nhl/.test(g)) return "sport";
+  if (/news|cnn|bbc|fox|msnbc|headline/.test(g)) return "news";
+  if (/movie|cinema|hbo|film|showtime/.test(g)) return "movie";
+  if (/entertain|comedy|drama|music|series/.test(g)) return "entertainment";
+  return "default";
+}
+
+function formatEpgWindow(epg: EpgEntry) {
+  const opts: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  const start = new Date(epg.start).toLocaleTimeString([], opts);
+  const end = new Date(epg.end).toLocaleTimeString([], opts);
+  return `${start} – ${end}`;
+}
+
 function Hero({ channel, epg }: { channel: Channel; epg?: EpgEntry }) {
   const play = useApp((s) => s.play);
   const isFav = useApp((s) => s.favorites.has(channel.id));
   const toggleFav = useApp((s) => s.toggleFavorite);
+  const theme = heroThemeFromGroup(channel.group);
 
-  const programLine =
-    epg?.title ??
-    channel.group ??
-    "Featured live channel";
+  const programTitle = epg?.title ?? channel.group ?? "Live channel";
+  const programMeta = epg
+    ? formatEpgWindow(epg)
+    : channel.group
+      ? `On ${channel.group}`
+      : "Streaming now";
 
   return (
     <section
+      data-theme={theme}
       className={cn(
-        "relative w-full overflow-hidden rounded-b-[1.75rem]",
-        "shadow-[0_32px_80px_rgba(0,0,0,0.55)]",
+        "hero-spotlight relative w-full rounded-b-2xl shadow-hero",
         "animate-fade-in",
       )}
     >
-      {/* Full-bleed cinematic backdrop (seamless with window + floating nav) */}
-      <div className="absolute inset-0">
-        {channel.logo ? (
-          <>
-            <img
-              key={channel.id}
-              src={channel.logo}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full animate-ambient-drift object-cover opacity-[0.42]"
-              style={{
-                filter: "blur(56px) saturate(175%)",
-                transform: "scale(1.12)",
-              }}
-            />
-            <img
-              src={channel.logo}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
-              style={{
-                mixBlendMode: "overlay",
-                transform: "scale(1.05)",
-              }}
-            />
-          </>
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(circle at 25% 25%, rgba(91,140,255,0.35), transparent 55%), radial-gradient(circle at 75% 75%, rgba(140,92,255,0.30), transparent 55%)",
-            }}
-          />
+      <div className="hero-spotlight-glow" aria-hidden />
+      <div className="hero-spotlight-grid" aria-hidden />
+      <div className="hero-spotlight-vignette" aria-hidden />
+
+      <div
+        className={cn(
+          "relative flex min-h-[min(62vh,680px)] flex-col justify-center gap-10",
+          "px-8 pb-14 pt-[calc(var(--titlebar-height)+2.75rem)]",
+          "lg:flex-row lg:items-center lg:justify-between lg:gap-12 lg:px-12 lg:pb-16 lg:pt-[calc(var(--titlebar-height)+3.25rem)]",
         )}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(105deg, rgba(6,7,11,0.88) 0%, rgba(6,7,11,0.45) 48%, rgba(6,7,11,0.12) 100%)",
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(0deg, rgba(6,7,11,0.92) 0%, rgba(6,7,11,0.25) 42%, transparent 72%)",
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 90% 70% at 50% 0%, rgba(0,0,0,0.35), transparent 55%)",
-          }}
-        />
-      </div>
+      >
+        <div className="max-w-2xl flex-1">
+          <span className="block text-[12px] font-medium uppercase tracking-wide text-text-secondary">
+            From your favorites
+          </span>
 
-      <div className="relative flex min-h-[min(78vh,900px)] flex-col">
-        {/* Vertically centered copy; top padding clears the floating top bar */}
-        <div className="relative flex min-h-0 flex-1 flex-col justify-center px-8 pb-16 pt-20 lg:px-12 lg:pb-20 lg:pt-24">
-          <div className="max-w-2xl">
-            <span className="block border-0 text-[10px] font-semibold uppercase tracking-[0.28em] text-white/55">
-              Featured
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="badge badge-live border-white/15 bg-black/35 text-white backdrop-blur-md">
+              <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-red-400" />
+              Live
             </span>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="badge badge-live border-white/15 bg-black/35 text-white backdrop-blur-md">
-                <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-red-400" />
-                Live now
-              </span>
-              {channel.group && (
-                <span className="badge border-white/15 bg-black/30 text-white/90 backdrop-blur-md">
-                  {channel.group}
-                </span>
-              )}
+            {channel.group && (
               <span className="badge border-white/15 bg-black/30 text-white/90 backdrop-blur-md">
-                HD
+                {channel.group}
               </span>
-            </div>
-
-            <h1 className="mt-5 text-[40px] font-semibold leading-[1.05] tracking-tightest text-white text-shadow-cinema sm:text-[52px] lg:text-[56px]">
-              {channel.name}
-            </h1>
-
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-white/70 text-shadow-cinema">
-              {programLine}
-            </p>
-
-            {channel.id && (
-              <div className="mt-4 text-[12.5px] text-white/45">
-                <span className="font-mono uppercase tracking-wider text-white/40">
-                  CH · {channel.id.slice(-6)}
-                </span>
-              </div>
             )}
+          </div>
 
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void play(channel)}
-                className="btn-cta group"
-              >
-                <Play size={16} fill="currentColor" />
-                Watch Now
-              </button>
-              <button
-                type="button"
-                onClick={() => void toggleFav(channel.id)}
-                className={cn(
-                  "inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/[0.08] text-white backdrop-blur-md transition-colors hover:bg-white/[0.14]",
-                  isFav && "border-pink-400/40 bg-pink-500/20 text-pink-100",
-                )}
-                title={isFav ? "Remove from favorites" : "Add to favorites"}
-              >
-                <Heart size={18} fill={isFav ? "currentColor" : "none"} />
-              </button>
-            </div>
+          <h1 className="mt-5 text-[36px] font-semibold leading-[1.06] tracking-tightest text-white text-shadow-hero sm:text-[44px] lg:text-[48px]">
+            {programTitle}
+          </h1>
+
+          <p className="mt-2 text-[15px] font-medium text-white/55">
+            {channel.name}
+          </p>
+
+          {epg?.description && (
+            <p className="mt-3 line-clamp-2 max-w-xl text-[14px] leading-relaxed text-white/60">
+              {epg.description}
+            </p>
+          )}
+
+          <p className="mt-3 text-[12.5px] text-white/40">{programMeta}</p>
+
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void play(channel)}
+              className="btn-cta group"
+            >
+              <Play size={16} fill="currentColor" />
+              Watch Now
+            </button>
+            <button
+              type="button"
+              onClick={() => void toggleFav(channel.id)}
+              className={cn(
+                "inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] text-white backdrop-blur-md transition-colors hover:bg-white/[0.12]",
+                isFav && "border-[#ff375f]/40 bg-[#ff375f]/15 text-[#ff9eb5]",
+              )}
+              title={isFav ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+            </button>
           </div>
         </div>
+
+        <HeroEmblem channel={channel} epg={epg} />
       </div>
     </section>
+  );
+}
+
+function HeroEmblem({
+  channel,
+  epg,
+}: {
+  channel: Channel;
+  epg?: EpgEntry;
+}) {
+  return (
+    <div className="flex flex-col items-center lg:items-end">
+      <div className="hero-emblem">
+        <span className="hero-emblem-ring" aria-hidden />
+        <div className="hero-emblem-card">
+          {channel.logo ? (
+            <img
+              src={channel.logo}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="max-h-full max-w-full object-contain"
+            />
+          ) : (
+            <Tv size={36} className="text-white/50" strokeWidth={1.25} />
+          )}
+        </div>
+      </div>
+
+      {epg && (
+        <div className="hero-now-card hidden sm:block">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-white/45">
+            On now
+          </p>
+          <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-snug text-white/85">
+            {epg.title}
+          </p>
+          <p className="mt-1 text-[11px] text-white/45">
+            {formatEpgWindow(epg)}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -333,7 +347,7 @@ function Rail({ icon: Icon, title, subtitle, channels, onMore }: RailProps) {
     <section>
       <div className="mb-3 flex items-end justify-between px-1">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.05] text-text-secondary ring-1 ring-white/5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-mac-fill text-text-secondary">
             <Icon size={14} />
           </div>
           <div>
@@ -348,7 +362,7 @@ function Rail({ icon: Icon, title, subtitle, channels, onMore }: RailProps) {
         {onMore && (
           <button
             onClick={onMore}
-            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-medium text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-text-primary"
+            className="glass-pill-nav-item px-3 py-1 text-[12px] !text-white/80 hover:!text-white"
           >
             See all <ArrowRight size={11} />
           </button>
@@ -360,7 +374,7 @@ function Rail({ icon: Icon, title, subtitle, channels, onMore }: RailProps) {
           ref={railRef}
           tabIndex={0}
           onKeyDown={onKey}
-          className="rail flex gap-3 overflow-x-auto px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-2xl"
+          className="rail flex gap-3 overflow-x-auto px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-white/25 rounded-xl"
         >
           {channels.map((c) => (
             <div key={c.id} className="w-[200px] shrink-0">
@@ -382,19 +396,8 @@ function Rail({ icon: Icon, title, subtitle, channels, onMore }: RailProps) {
 function EmptyHome({ onSetup }: { onSetup: () => void }) {
   return (
     <div className="flex h-[78vh] flex-col items-center justify-center px-8 text-center">
-      <div className="relative">
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 rounded-full opacity-70"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(91,140,255,0.45), transparent 70%)",
-            filter: "blur(40px)",
-          }}
-        />
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-cinema-violet shadow-glow">
-          <Sparkles size={26} className="text-white" />
-        </div>
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.08] ring-1 ring-white/10">
+        <Sparkles size={26} className="text-white/90" />
       </div>
       <h1 className="mt-6 text-[32px] font-semibold leading-tight tracking-tightest text-text-primary">
         Welcome to Play It Up

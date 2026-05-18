@@ -11,19 +11,8 @@ export function Favorites() {
   if (list.length === 0) {
     return (
       <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-        <div className="relative">
-          <div
-            aria-hidden
-            className="absolute inset-0 -z-10 rounded-full opacity-60"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(255,90,160,0.45), transparent 70%)",
-              filter: "blur(40px)",
-            }}
-          />
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] ring-1 ring-white/10 backdrop-blur-xl">
-            <Heart size={22} className="text-pink-300" />
-          </div>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-mac-fill ring-1 ring-border-subtle">
+          <Heart size={22} className="text-[#ff375f]" />
         </div>
         <h2 className="mt-5 text-xl font-semibold tracking-tightest text-text-primary">
           No favorites yet

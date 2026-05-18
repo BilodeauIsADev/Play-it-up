@@ -1,31 +1,20 @@
 import {
   ArrowDownUp,
-  Compass,
   Download,
-  Heart,
   LayoutGrid,
   List,
   Plus,
-  Search as SearchIcon,
-  Tv,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useApp, type Page } from "../store/app";
 import { cn } from "../lib/cn";
 import appLogo from "../../Assets/Play-it-uplogo.png";
 
-interface TabItem {
-  id: Page;
-  label: string;
-  icon: typeof Compass;
-}
-
-const TABS: TabItem[] = [
-  { id: "home", label: "Home", icon: Compass },
-  { id: "live", label: "Live TV", icon: Tv },
-  { id: "favorites", label: "Favorites", icon: Heart },
-  { id: "search", label: "Search", icon: SearchIcon },
-  { id: "settings", label: "Settings", icon: SettingsIcon },
+const NAV_TABS: { id: Page; label: string }[] = [
+  { id: "home", label: "Home" },
+  { id: "live", label: "Live TV" },
+  { id: "favorites", label: "Favorites" },
+  { id: "search", label: "Search" },
 ];
 
 export function TopBar() {
@@ -33,50 +22,34 @@ export function TopBar() {
   const setPage = useApp((s) => s.setPage);
   const updateNudgeVersion = useApp((s) => s.updateNudgeVersion);
 
-  const isHome = page === "home";
-
   return (
     <header
       className={cn(
-        "drag z-40 flex h-14 items-center gap-3 border-0 bg-transparent px-6",
-        isHome
-          ? "absolute inset-x-0 top-0"
-          : "relative shrink-0",
+        "titlebar-chrome drag",
+        "absolute inset-x-0 top-0 z-40",
+        "flex h-[var(--titlebar-height)] items-center",
       )}
     >
-      {/* Left: always-visible brand */}
-      <div className="flex min-w-[200px] items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <img
           src={appLogo}
           alt=""
-          width={26}
-          height={26}
+          width={28}
+          height={28}
           draggable={false}
-          className={cn(
-            "h-[26px] w-[26px] shrink-0 select-none object-contain",
-            isHome && "drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]",
-          )}
+          className="h-7 w-7 shrink-0 select-none object-contain"
         />
-        <div
-          className={cn(
-            "text-[13px] font-semibold tracking-tight",
-            isHome
-              ? "text-white/95 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)]"
-              : "text-text-primary",
-          )}
-        >
+        <span className="truncate text-[15px] font-semibold tracking-tight text-white">
           Play It Up
-        </div>
+        </span>
       </div>
 
-      {/* Centered pill tab nav */}
       <nav
-        className="no-drag mx-auto flex items-center"
+        className="no-drag absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         aria-label="Primary"
       >
-        <div className="glass-strong flex items-center gap-1 rounded-full p-1 shadow-glass">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
+        <div className="glass-pill-nav">
+          {NAV_TABS.map((tab) => {
             const active = page === tab.id;
             return (
               <button
@@ -84,35 +57,23 @@ export function TopBar() {
                 type="button"
                 onClick={() => setPage(tab.id)}
                 className={cn(
-                  "group relative flex items-center gap-2 rounded-full px-4 py-1.5 text-[12.5px] font-medium tracking-tight",
-                  "transition-all duration-200 ease-out",
-                  active
-                    ? "bg-white text-bg-base shadow-[0_4px_18px_rgba(255,255,255,0.18)]"
-                    : isHome
-                      ? "text-white/75 hover:bg-white/10 hover:text-white"
-                      : "text-text-secondary hover:bg-white/[0.06] hover:text-text-primary",
+                  "glass-pill-nav-item",
+                  active && "glass-pill-nav-item-active",
                 )}
               >
-                <Icon size={13} className="shrink-0" />
-                <span>{tab.label}</span>
+                {tab.label}
               </button>
             );
           })}
         </div>
       </nav>
 
-      {/* Right: contextual actions */}
-      <div className="no-drag flex min-w-[200px] items-center justify-end gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
         {updateNudgeVersion && (
           <button
             type="button"
             onClick={() => setPage("settings")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold tracking-tight transition-colors",
-              isHome
-                ? "bg-white/15 text-white hover:bg-white/25"
-                : "bg-accent/20 text-accent hover:bg-accent/30",
-            )}
+            className="titlebar-icon-btn no-drag !h-8 !w-auto gap-1.5 !px-3 text-[11.5px] font-semibold"
             title="Open Settings to download the update"
           >
             <Download size={12} className="shrink-0" />
@@ -120,6 +81,19 @@ export function TopBar() {
           </button>
         )}
         <ContextActions />
+        <button
+          type="button"
+          onClick={() => setPage("settings")}
+          className={cn(
+            "titlebar-icon-btn no-drag",
+            page === "settings" && "titlebar-icon-btn-active",
+          )}
+          title="Settings"
+          aria-label="Settings"
+          aria-current={page === "settings" ? "page" : undefined}
+        >
+          <SettingsIcon size={18} />
+        </button>
       </div>
     </header>
   );
@@ -134,31 +108,34 @@ function ContextActions() {
   if (page !== "live" && page !== "favorites") return null;
 
   return (
-    <>
+    <div className="glass-pill no-drag flex items-center gap-0.5 px-1 py-1">
       <button
-        className="btn-secondary hidden h-9 px-3 sm:inline-flex"
+        type="button"
+        className="glass-pill-nav-item hidden px-3 py-1.5 sm:inline-flex"
         onClick={() => setPage("settings")}
       >
-        <Plus size={13} /> Add source
+        <Plus size={13} className="mr-1 opacity-80" />
+        Add source
       </button>
       <ViewToggle />
       <button
+        type="button"
         className={cn(
-          "icon-btn",
-          channelSortMode !== "none" && "bg-white/[0.08] text-text-primary",
+          "titlebar-icon-btn !h-8 !w-8",
+          channelSortMode !== "none" && "titlebar-icon-btn-active",
         )}
         title={
           channelSortMode === "none"
-            ? "Sort: Off (click for Name A-Z)"
+            ? "Sort: Off"
             : channelSortMode === "name-asc"
-              ? "Sort: Name A-Z (click for Z-A)"
-              : "Sort: Name Z-A (click to clear sort)"
+              ? "Sort: A–Z"
+              : "Sort: Z–A"
         }
         onClick={cycleChannelSortMode}
       >
-        <ArrowDownUp size={15} />
+        <ArrowDownUp size={14} />
       </button>
-    </>
+    </div>
   );
 }
 
@@ -167,26 +144,24 @@ function ViewToggle() {
   const setChannelViewMode = useApp((s) => s.setChannelViewMode);
 
   return (
-    <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5 backdrop-blur-xl">
+    <div className="flex items-center gap-0.5 px-0.5">
       <button
+        type="button"
         onClick={() => setChannelViewMode("grid")}
         className={cn(
-          "flex h-7 w-7 items-center justify-center rounded-full transition-colors",
-          channelViewMode === "grid"
-            ? "bg-white text-bg-base"
-            : "text-text-secondary hover:text-text-primary",
+          "glass-pill-nav-item !h-8 !w-8 !px-0",
+          channelViewMode === "grid" && "glass-pill-nav-item-active",
         )}
         title="Grid"
       >
         <LayoutGrid size={13} />
       </button>
       <button
+        type="button"
         onClick={() => setChannelViewMode("list")}
         className={cn(
-          "flex h-7 w-7 items-center justify-center rounded-full transition-colors",
-          channelViewMode === "list"
-            ? "bg-white text-bg-base"
-            : "text-text-secondary hover:text-text-primary",
+          "glass-pill-nav-item !h-8 !w-8 !px-0",
+          channelViewMode === "list" && "glass-pill-nav-item-active",
         )}
         title="List"
       >

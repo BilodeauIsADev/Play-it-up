@@ -42,7 +42,7 @@ export function LiveTV() {
   }
 
   return (
-    <div className="-mx-8 flex h-full min-h-0 items-stretch gap-0 overflow-hidden">
+    <div className="-mx-6 flex h-full min-h-0 items-stretch gap-0 overflow-hidden">
       <CategorySidebar
         rows={categoryRows}
         active={activeCat ?? "__all"}
@@ -52,7 +52,7 @@ export function LiveTV() {
 
       <div className="min-w-0 flex-1 min-h-0 overflow-y-auto py-1 pb-32 pr-8 pl-6">
         {error && (
-          <div className="mt-2 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-xl">
+          <div className="mt-2 rounded-lg border border-[#ff453a]/30 bg-[#ff453a]/10 px-4 py-3 text-sm text-[#ff9f9a]">
             {error}
           </div>
         )}
@@ -85,8 +85,10 @@ function CategorySidebar({
     <div
       className={cn(
         "flex w-[240px] shrink-0 flex-col self-start",
-        "border-r border-white/[0.05] bg-bg-glass/35 backdrop-blur-2xl",
-        topBarHidden ? "h-screen" : "h-[calc(100dvh-3.5rem)]",
+        "mac-sidebar",
+        topBarHidden
+          ? "h-screen"
+          : "h-[calc(100dvh-var(--titlebar-height))]",
       )}
       aria-label="Channel categories"
     >
@@ -107,15 +109,10 @@ function CategorySidebar({
                 aria-selected={isActive}
                 onClick={() => onSelect(row.id)}
                 className={cn(
-                  "group relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] tracking-tight transition-all duration-200",
-                  isActive
-                    ? "bg-white/[0.08] text-text-primary"
-                    : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+                  "mac-list-row justify-between px-3 py-2",
+                  isActive && "mac-list-row-active",
                 )}
               >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-accent shadow-[0_0_12px_rgba(91,140,255,0.6)]" />
-                )}
                 <span className="min-w-0 flex-1 truncate">{row.name}</span>
                 <span
                   className={cn(
