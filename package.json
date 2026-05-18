@@ -1,7 +1,7 @@
 {
   "name": "play-it-up",
   "productName": "Play It Up",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Cross-platform IPTV desktop app for Xtream Codes and M3U playlists (HLS + optional mpv).",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -78,7 +78,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "Play-It-Up-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
