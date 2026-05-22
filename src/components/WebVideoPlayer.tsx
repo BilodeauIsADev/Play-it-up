@@ -1,6 +1,7 @@
 import Hls from "hls.js";
 import { useEffect, useRef, type RefObject } from "react";
 import type { Channel } from "../../shared/types";
+import { isVodChannel } from "../lib/mediaKind";
 import { useApp } from "../store/app";
 import {
   WEB_PLAYER_COMMAND,
@@ -137,6 +138,7 @@ export function WebVideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const isVod = isVodChannel(channel);
     let hls: Hls | null = null;
     let disposed = false;
     let startupTimer: number | undefined;
@@ -179,7 +181,13 @@ export function WebVideoPlayer({
     const onPause = () => setStatus("paused");
     const onEnded = () => finishWebPlayback();
     const onTimeUpdate = () => {
-      if (!video.paused) setStatus("playing");
+      setStatus(video.paused ? "paused" : "playing");
+    };
+    const onSeeked = () => {
+      setStatus(video.paused ? "paused" : "playing");
+    };
+    const onLoadedMetadata = () => {
+      setStatus(video.paused ? "paused" : "loading");
     };
     const onVolumeChange = () =>
       setPlayerStatus({
@@ -204,6 +212,12 @@ export function WebVideoPlayer({
       } else if (command.type === "volume") {
         video.volume = Math.max(0, Math.min(1, command.volume / 100));
         video.muted = command.volume === 0;
+      } else if (command.type === "seek") {
+        if (!isVod || !Number.isFinite(video.duration)) return;
+        video.currentTime = Math.max(
+          0,
+          Math.min(video.duration, command.positionSec),
+        );
       } else if (command.type === "fullscreen") {
         const container = fullscreenContainerRef?.current ?? null;
         const frame = frameRef.current;
@@ -225,6 +239,8 @@ export function WebVideoPlayer({
     video.addEventListener("pause", onPause);
     video.addEventListener("ended", onEnded);
     video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("seeked", onSeeked);
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
     video.addEventListener("volumechange", onVolumeChange);
     video.addEventListener("error", onError);
     window.addEventListener(WEB_PLAYER_COMMAND, onCommand);
@@ -237,9 +253,13 @@ export function WebVideoPlayer({
       if (looksLikeHls && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
-          liveSyncDurationCount: 2,
-          maxLiveSyncPlaybackRate: 1.5,
+          lowLatencyMode: !isVod,
+          ...(isVod
+            ? {}
+            : {
+                liveSyncDurationCount: 2,
+                maxLiveSyncPlaybackRate: 1.5,
+              }),
         });
         hls.attachMedia(video);
         hls.loadSource(playbackUrl);
@@ -291,6 +311,8 @@ export function WebVideoPlayer({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("ended", onEnded);
       video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("volumechange", onVolumeChange);
       video.removeEventListener("error", onError);
       if (startupTimer !== undefined) window.clearTimeout(startupTimer);

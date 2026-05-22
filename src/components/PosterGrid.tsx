@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChannelCard } from "./ChannelCard";
+import { PosterCard } from "./PosterCard";
 import type { Channel } from "../../shared/types";
 import { useApp } from "../store/app";
 
@@ -7,25 +7,21 @@ interface Props {
   channels: Channel[];
   emptyMessage?: string;
   onChannelSelect?: (channel: Channel) => void;
+  onChannelHover?: (channel: Channel) => void;
 }
 
-const PAGE_SIZE = 120;
+const PAGE_SIZE = 48;
 
-export function ChannelGrid({
+export function PosterGrid({
   channels,
   emptyMessage,
   onChannelSelect,
+  onChannelHover,
 }: Props) {
-  const epg = useApp((s) => s.epg);
-  const refreshEpg = useApp((s) => s.refreshEpgForVisible);
-  const channelViewMode = useApp((s) => s.channelViewMode);
   const channelSortMode = useApp((s) => s.channelSortMode);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Reset pagination whenever the upstream channel list changes (filter,
-  // category switch, search query, etc.). Avoids stale "load more"
-  // pointers when the dataset shrinks.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [channels]);
@@ -47,15 +43,6 @@ export function ChannelGrid({
     [ordered, visibleCount],
   );
 
-  // Throttle EPG fetches to the actually-rendered slice so a 5k-channel
-  // dataset doesn't fire 5k network calls on mount.
-  useEffect(() => {
-    const ids = visible
-      .map((c) => c.epgChannelId)
-      .filter((id): id is string => Boolean(id));
-    if (ids.length > 0) void refreshEpg(ids);
-  }, [visible, refreshEpg]);
-
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -69,7 +56,7 @@ export function ChannelGrid({
           }
         }
       },
-      { rootMargin: "600px 0px" },
+      { rootMargin: "800px 0px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -77,8 +64,8 @@ export function ChannelGrid({
 
   if (ordered.length === 0) {
     return (
-      <div className="flex h-72 items-center justify-center text-sm text-text-muted">
-        {emptyMessage ?? "No channels."}
+      <div className="flex h-56 items-center justify-center text-sm text-text-muted">
+        {emptyMessage ?? "Nothing to show."}
       </div>
     );
   }
@@ -87,20 +74,13 @@ export function ChannelGrid({
 
   return (
     <div className="space-y-4 pb-4">
-      <div
-        className={
-          channelViewMode === "list"
-            ? "grid grid-cols-1 gap-2"
-            : "grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5"
-        }
-      >
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-4 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(152px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
         {visible.map((c) => (
-          <ChannelCard
+          <PosterCard
             key={c.id}
             channel={c}
-            epg={c.epgChannelId ? epg[c.epgChannelId] : undefined}
-            viewMode={channelViewMode}
             onSelect={onChannelSelect}
+            onHover={onChannelHover}
           />
         ))}
       </div>

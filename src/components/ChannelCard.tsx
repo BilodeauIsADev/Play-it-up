@@ -1,4 +1,4 @@
-import { Heart, Play, Tv } from "lucide-react";
+import { Clapperboard, Film, Heart, Play, Tv } from "lucide-react";
 import { memo, useState, type KeyboardEvent } from "react";
 import { cn } from "../lib/cn";
 import { useApp } from "../store/app";
@@ -8,28 +8,48 @@ interface Props {
   channel: Channel;
   epg?: EpgEntry;
   viewMode?: "grid" | "list";
+  onSelect?: (channel: Channel) => void;
 }
 
-function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
+function ChannelCardImpl({ channel, epg, viewMode = "grid", onSelect }: Props) {
   const play = useApp((s) => s.play);
   const isFav = useApp((s) => s.favorites.has(channel.id));
   const toggleFav = useApp((s) => s.toggleFavorite);
   const [imgFailed, setImgFailed] = useState(false);
 
   const showLogo = channel.logo && !imgFailed;
+  const isSeries = channel.kind === "series" && !channel.url;
+  const isMovie = channel.kind === "movie";
+
+  function handleActivate() {
+    if (onSelect) {
+      onSelect(channel);
+      return;
+    }
+    if (isSeries) return;
+    void play(channel);
+  }
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      void play(channel);
+      handleActivate();
     }
   }
+
+  const subtitle =
+    epg?.title ??
+    channel.releaseDate ??
+    channel.group ??
+    (isMovie ? "Movie" : isSeries ? "TV Show" : "Live");
+
+  const FallbackIcon = isMovie ? Film : isSeries ? Clapperboard : Tv;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => void play(channel)}
+      onClick={handleActivate}
       onKeyDown={onKey}
       className={cn(
         "group relative flex w-full overflow-hidden rounded-xl text-left",
@@ -60,14 +80,26 @@ function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
           />
         ) : (
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-mac-fill text-text-muted">
-            <Tv size={18} />
+            <FallbackIcon size={18} />
           </div>
         )}
 
-        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-[#ff453a]" />
-          Live
-        </span>
+        {channel.kind === "live" && (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-[#ff453a]" />
+            Live
+          </span>
+        )}
+        {isMovie && (
+          <span className="absolute left-2 top-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+            Movie
+          </span>
+        )}
+        {isSeries && (
+          <span className="absolute left-2 top-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+            Series
+          </span>
+        )}
 
         <button
           onClick={(e) => {
@@ -97,9 +129,7 @@ function ChannelCardImpl({ channel, epg, viewMode = "grid" }: Props) {
         <div className="truncate text-[13px] font-medium tracking-tight text-text-primary">
           {channel.name}
         </div>
-        <div className="truncate text-[11px] text-text-muted">
-          {epg?.title ?? channel.group ?? "Live"}
-        </div>
+        <div className="truncate text-[11px] text-text-muted">{subtitle}</div>
       </div>
     </div>
   );
@@ -110,6 +140,7 @@ export const ChannelCard = memo(ChannelCardImpl, (prev, next) => {
     prev.channel === next.channel &&
     prev.epg?.title === next.epg?.title &&
     prev.epg?.start === next.epg?.start &&
-    prev.viewMode === next.viewMode
+    prev.viewMode === next.viewMode &&
+    prev.onSelect === next.onSelect
   );
 });

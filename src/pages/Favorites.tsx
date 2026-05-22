@@ -1,12 +1,20 @@
 import { Heart } from "lucide-react";
+import { useMemo } from "react";
 import { ChannelGrid } from "../components/ChannelGrid";
 import { useApp } from "../store/app";
 
 export function Favorites() {
   const channels = useApp((s) => s.channels);
+  const movies = useApp((s) => s.movies);
+  const series = useApp((s) => s.series);
   const favorites = useApp((s) => s.favorites);
 
-  const list = channels.filter((c) => favorites.has(c.id));
+  const catalog = useMemo(
+    () => [...channels, ...movies, ...series],
+    [channels, movies, series],
+  );
+
+  const list = catalog.filter((c) => favorites.has(c.id));
 
   if (list.length === 0) {
     return (
@@ -18,8 +26,7 @@ export function Favorites() {
           No favorites yet
         </h2>
         <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-text-muted">
-          Hover any channel and tap the heart to save it here for quick
-          access.
+          Hover any title and tap the heart to save it here for quick access.
         </p>
       </div>
     );
@@ -33,7 +40,7 @@ export function Favorites() {
             Your Favorites
           </h1>
           <p className="text-[12px] text-text-muted">
-            {list.length} saved channel{list.length === 1 ? "" : "s"}
+            {list.length} saved title{list.length === 1 ? "" : "s"}
           </p>
         </div>
       </div>

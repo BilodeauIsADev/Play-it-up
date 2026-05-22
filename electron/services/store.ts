@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultVolume: 80,
   cache: "yes",
   playbackMode: "web",
+  countryFilter: [],
+  languageFilter: [],
 };
 
 const SECRET_FIELDS: Record<string, string[]> = {
@@ -96,7 +98,7 @@ class Store {
 
   removeSource(id: string): void {
     this.data.sources = this.data.sources.filter((s) => s.id !== id);
-    delete this.data.channelCache[id];
+    this.clearChannelCachesForSource(id);
     this.flush();
   }
 
@@ -134,22 +136,51 @@ class Store {
 
   // ---------- Channel cache ----------
 
-  getChannelCache<T>(sourceId: string): { ts: number; data: T } | undefined {
-    return this.data.channelCache[sourceId] as
-      | { ts: number; data: T }
-      | undefined;
+  getChannelCache<T>(cacheKey: string): { ts: number; data: T } | undefined {
+    const hit =
+      this.data.channelCache[cacheKey] ??
+      // Legacy caches keyed only by source id are treated as live.
+      (cacheKey.endsWith(":live")
+        ? this.data.channelCache[cacheKey.slice(0, -":live".length)]
+        : undefined);
+    return hit as { ts: number; data: T } | undefined;
   }
 
-  setChannelCache<T>(sourceId: string, data: T): void {
-    this.data.channelCache[sourceId] = { ts: Date.now(), data };
+  setChannelCache<T>(cacheKey: string, data: T): void {
+    this.data.channelCache[cacheKey] = { ts: Date.now(), data };
     this.flush();
   }
 
-  clearChannelCache(sourceId: string): void {
-    if (this.data.channelCache[sourceId]) {
-      delete this.data.channelCache[sourceId];
+  clearChannelCache(cacheKey: string): void {
+    if (this.data.channelCache[cacheKey]) {
+      delete this.data.channelCache[cacheKey];
       this.flush();
     }
+  }
+
+  clearChannelCachesForSource(sourceId: string): void {
+    let changed = false;
+    for (const key of Object.keys(this.data.channelCache)) {
+      if (key === sourceId || key.startsWith(`${sourceId}:`)) {
+        delete this.data.channelCache[key];
+        changed = true;
+      }
+    }
+    if (changed) this.flush();
+  }
+
+  /** Drop persisted empty movie/series caches from bad failed fetches. */
+  purgeEmptyVodCaches(): void {
+    let changed = false;
+    for (const [key, entry] of Object.entries(this.data.channelCache)) {
+      if (!key.endsWith(":movie") && !key.endsWith(":series")) continue;
+      const data = entry?.data as { channels?: unknown[] } | undefined;
+      if (!Array.isArray(data?.channels) || data.channels.length === 0) {
+        delete this.data.channelCache[key];
+        changed = true;
+      }
+    }
+    if (changed) this.flush();
   }
 
   // ---------- Encryption helpers ----------

@@ -42,7 +42,14 @@ const channelCache = new Map<
   { channels: Channel[]; categories: Category[]; ts: number }
 >();
 
+/** Episodes registered when series info is fetched (for mpv playback lookup). */
+const episodeCache = new Map<string, Channel>();
+
 const CACHE_TTL_MS = 10 * 60 * 1000;
+
+function cacheKey(sourceId: string, kind: StreamKind): string {
+  return `${sourceId}:${kind}`;
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -69,6 +76,29 @@ function applyWinTitleBarOverlay(win: BrowserWindow): void {
     symbolColor: "#f5f5f7",
     height: WINDOW_CHROME.titleBarHeight,
   });
+}
+
+/** Hide Win11 caption buttons by making overlay symbols fully transparent. */
+function hideWinCaptionButtons(win: BrowserWindow): void {
+  if (process.platform !== "win32") return;
+  win.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor: "#00000000",
+    height: WINDOW_CHROME.titleBarHeight,
+  });
+}
+
+/** Tracks whether native caption buttons should be visible (renderer-driven). */
+let windowCaptionVisible = true;
+
+function applyWindowCaptionVisibility(win: BrowserWindow | null): void {
+  if (!win) return;
+  if (process.platform === "win32") {
+    if (windowCaptionVisible) applyWinTitleBarOverlay(win);
+    else hideWinCaptionButtons(win);
+  } else if (process.platform === "darwin") {
+    win.setWindowButtonVisibility(windowCaptionVisible);
+  }
 }
 
 async function createMainWindow(): Promise<void> {
@@ -113,13 +143,13 @@ async function createMainWindow(): Promise<void> {
       mainWindow?.setTitleBarOverlay({ height: 0 });
     });
     mainWindow.on("leave-full-screen", () => {
-      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+      applyWindowCaptionVisibility(mainWindow);
     });
     mainWindow.on("maximize", () => {
-      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+      applyWindowCaptionVisibility(mainWindow);
     });
     mainWindow.on("unmaximize", () => {
-      if (mainWindow) applyWinTitleBarOverlay(mainWindow);
+      applyWindowCaptionVisibility(mainWindow);
     });
   }
 
@@ -352,7 +382,9 @@ function isLikelyMediaRequest(url: string, resourceType: string): boolean {
     const path = parsed.pathname.toLowerCase();
     return (
       path.includes("/live/") ||
-      /\.(?:m3u8|ts|m4s|mp4|aac|key)$/.test(path)
+      path.includes("/movie/") ||
+      path.includes("/series/") ||
+      /\.(?:m3u8|ts|m4s|mp4|mkv|aac|key)$/.test(path)
     );
   } catch {
     return false;
@@ -363,21 +395,46 @@ function broadcastSourcesChanged(): void {
   mainWindow?.webContents.send("sources:changed", undefined);
 }
 
+function shouldPersistCache(
+  kind: StreamKind,
+  data: { channels: Channel[]; categories: Category[] },
+): boolean {
+  if (kind === "live") return true;
+  return data.channels.length > 0;
+}
+
+function isUsableCache(
+  kind: StreamKind,
+  data: { channels: Channel[]; categories: Category[] },
+): boolean {
+  if (kind === "live") return true;
+  return data.channels.length > 0;
+}
+
 async function loadChannelsForSource(
   sourceId: string,
   kind: StreamKind = "live",
 ): Promise<{ channels: Channel[]; categories: Category[] }> {
-  const cached = channelCache.get(sourceId);
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+  const key = cacheKey(sourceId, kind);
+  const cached = channelCache.get(key);
+  if (
+    cached &&
+    Date.now() - cached.ts < CACHE_TTL_MS &&
+    isUsableCache(kind, cached)
+  ) {
     return { channels: cached.channels, categories: cached.categories };
   }
 
   const persisted = store.getChannelCache<{
     channels: Channel[];
     categories: Category[];
-  }>(sourceId);
-  if (persisted && Date.now() - persisted.ts < CACHE_TTL_MS) {
-    channelCache.set(sourceId, { ...persisted.data, ts: persisted.ts });
+  }>(key);
+  if (
+    persisted &&
+    Date.now() - persisted.ts < CACHE_TTL_MS &&
+    isUsableCache(kind, persisted.data)
+  ) {
+    channelCache.set(key, { ...persisted.data, ts: persisted.ts });
     return persisted.data;
   }
 
@@ -393,28 +450,41 @@ async function loadChannelsForSource(
     let result: { channels: Channel[]; categories: Category[] };
 
     if (src.kind === "xtream") {
-      if (kind !== "live") {
-        // VOD/series support TBD; for now empty.
-        result = { channels: [], categories: [] };
+      if (kind === "movie") {
+        result = await xtream.fetchVod(src);
+      } else if (kind === "series") {
+        result = await xtream.fetchSeries(src);
       } else {
         result = await xtream.fetchLive(src);
       }
     } else if (src.kind === "m3u-url") {
-      const headers: Record<string, string> = {};
-      if (src.userAgent) headers["User-Agent"] = src.userAgent;
-      const res = await fetch(src.url, { headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      result = parseM3U(text, { sourceId });
+      if (kind !== "live") {
+        result = { channels: [], categories: [] };
+      } else {
+        const headers: Record<string, string> = {};
+        if (src.userAgent) headers["User-Agent"] = src.userAgent;
+        const res = await fetch(src.url, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        result = parseM3U(text, { sourceId });
+      }
     } else if (src.kind === "m3u-file") {
-      const text = await fs.readFile(src.filePath, "utf-8");
-      result = parseM3U(text, { sourceId });
+      if (kind !== "live") {
+        result = { channels: [], categories: [] };
+      } else {
+        const text = await fs.readFile(src.filePath, "utf-8");
+        result = parseM3U(text, { sourceId });
+      }
     } else {
       throw new Error("Unknown source kind");
     }
 
-    channelCache.set(sourceId, { ...result, ts: Date.now() });
-    store.setChannelCache(sourceId, result);
+    channelCache.set(key, { ...result, ts: Date.now() });
+    if (shouldPersistCache(kind, result)) {
+      store.setChannelCache(key, result);
+    } else {
+      store.clearChannelCache(key);
+    }
     return result;
   } finally {
     mainWindow?.webContents.send("channels:loading", {
@@ -425,11 +495,26 @@ async function loadChannelsForSource(
 }
 
 function findChannel(channelId: string): Channel | undefined {
+  const episode = episodeCache.get(channelId);
+  if (episode) return episode;
+
   for (const cache of channelCache.values()) {
     const hit = cache.channels.find((c) => c.id === channelId);
     if (hit) return hit;
   }
   return undefined;
+}
+
+function clearSourceCaches(sourceId: string): void {
+  for (const key of [...channelCache.keys()]) {
+    if (key === sourceId || key.startsWith(`${sourceId}:`)) {
+      channelCache.delete(key);
+    }
+  }
+  for (const key of [...episodeCache.keys()]) {
+    if (key.startsWith(`${sourceId}:`)) episodeCache.delete(key);
+  }
+  store.clearChannelCachesForSource(sourceId);
 }
 
 function registerIpc(): void {
@@ -468,7 +553,7 @@ function registerIpc(): void {
 
   ipcMain.handle("sources:remove", (_, id: string) => {
     store.removeSource(id);
-    channelCache.delete(id);
+    clearSourceCaches(id);
     broadcastSourcesChanged();
   });
 
@@ -512,19 +597,54 @@ function registerIpc(): void {
       loadChannelsForSource(sourceId, kind),
   );
 
-  ipcMain.handle("channels:refresh", async (_, sourceId: string) => {
-    channelCache.delete(sourceId);
-    store.clearChannelCache(sourceId);
-    try {
-      await loadChannelsForSource(sourceId);
-      return { ok: true, message: "Refreshed." };
-    } catch (err) {
-      return {
-        ok: false,
-        message: err instanceof Error ? err.message : String(err),
-      };
-    }
-  });
+  ipcMain.handle(
+    "channels:refresh",
+    async (_, sourceId: string, kind?: StreamKind) => {
+      if (kind) {
+        channelCache.delete(cacheKey(sourceId, kind));
+        store.clearChannelCache(cacheKey(sourceId, kind));
+        try {
+          await loadChannelsForSource(sourceId, kind);
+          return { ok: true, message: "Refreshed." };
+        } catch (err) {
+          return {
+            ok: false,
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
+
+      clearSourceCaches(sourceId);
+      try {
+        await Promise.all([
+          loadChannelsForSource(sourceId, "live"),
+          loadChannelsForSource(sourceId, "movie"),
+          loadChannelsForSource(sourceId, "series"),
+        ]);
+        return { ok: true, message: "Refreshed." };
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "series:info",
+    async (_, sourceId: string, seriesId: string) => {
+      const src = store.getSource(sourceId);
+      if (!src || src.kind !== "xtream") {
+        throw new Error("Series info requires an Xtream source");
+      }
+      const { info, episodes } = await xtream.fetchSeriesInfo(src, seriesId);
+      for (const ep of episodes) {
+        episodeCache.set(ep.id, ep);
+      }
+      return info;
+    },
+  );
 
   ipcMain.handle("favorites:list", () => store.listFavorites());
   ipcMain.handle("favorites:toggle", (_, id: string) =>
@@ -620,6 +740,11 @@ function registerIpc(): void {
     mpv?.setFullscreen(fs),
   );
 
+  ipcMain.handle("window:setCaptionVisible", (_, visible: boolean) => {
+    windowCaptionVisible = visible;
+    applyWindowCaptionVisibility(mainWindow);
+  });
+
   ipcMain.handle("settings:get", () => store.getSettings());
   ipcMain.handle("settings:set", (_, patch) => store.setSettings(patch));
   ipcMain.handle("mpv:probe", () => probeMpv(store.getSettings().mpvPath));
@@ -651,6 +776,7 @@ function registerIpc(): void {
 
 app.whenReady().then(async () => {
   await store.load();
+  store.purgeEmptyVodCaches();
   initAutoUpdater(() => mainWindow);
   installMediaProxy();
   registerIpc();

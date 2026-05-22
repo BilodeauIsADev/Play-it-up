@@ -57,6 +57,35 @@ export interface Channel {
   /** Optional metadata. */
   number?: number;
   catchupDays?: number;
+  rating?: string;
+  releaseDate?: string;
+  plot?: string;
+  containerExtension?: string;
+}
+
+export interface SeriesEpisode {
+  /** Stable id: `${sourceId}:ep:${episodeId}`. */
+  id: string;
+  sourceId: string;
+  seriesId: string;
+  providerId: string;
+  season: number;
+  episodeNum: number;
+  title: string;
+  url: string;
+  containerExtension?: string;
+}
+
+export interface SeriesInfo {
+  seriesId: string;
+  name: string;
+  cover?: string;
+  plot?: string;
+  rating?: string;
+  releaseDate?: string;
+  genre?: string;
+  seasons: { seasonNumber: number; name?: string; episodeCount: number }[];
+  episodes: Record<string, SeriesEpisode[]>;
 }
 
 export interface Category {
@@ -111,6 +140,16 @@ export interface AppSettings {
   playbackMode: "web" | "embedded" | "own-window";
   /** Extra args passed to mpv. */
   extraArgs?: string[];
+  /**
+   * When non-empty, only categories whose names match these country codes
+   * are shown in Live TV, Movies, and TV Shows. Empty = show all.
+   */
+  countryFilter?: string[];
+  /**
+   * When non-empty, only categories whose names match these language codes
+   * (e.g. EN, DE) are shown. Combined with countryFilter using OR logic.
+   */
+  languageFilter?: string[];
 }
 
 export interface MpvProbeResult {
@@ -133,7 +172,15 @@ export type IpcInvokeMap = {
     sourceId: string,
     kind?: StreamKind,
   ) => { channels: Channel[]; categories: Category[] };
-  "channels:refresh": (sourceId: string) => { ok: boolean; message: string };
+  "channels:refresh": (
+    sourceId: string,
+    kind?: StreamKind,
+  ) => { ok: boolean; message: string };
+
+  "series:info": (
+    sourceId: string,
+    seriesId: string,
+  ) => SeriesInfo;
 
   "favorites:list": () => string[];
   "favorites:toggle": (channelId: string) => boolean;
@@ -153,6 +200,9 @@ export type IpcInvokeMap = {
   }) => void;
   "player:setVisible": (visible: boolean) => void;
   "player:setFullscreen": (fullscreen: boolean) => void;
+
+  /** Hide native min/max/close while the player chrome is auto-hidden. */
+  "window:setCaptionVisible": (visible: boolean) => void;
 
   "settings:get": () => AppSettings;
   "settings:set": (patch: Partial<AppSettings>) => AppSettings;

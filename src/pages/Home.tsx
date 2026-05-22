@@ -1,13 +1,11 @@
 import {
-  ArrowRight,
+  ChevronRight,
+  Clapperboard,
   Film,
   Heart,
-  Newspaper,
-  Play,
   Plus,
   Radio,
   Sparkles,
-  Trophy,
   Tv,
   type LucideIcon,
 } from "lucide-react";
@@ -18,381 +16,388 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
-import { ChannelCard } from "../components/ChannelCard";
+import { HomeSpotlight } from "../components/HomeSpotlight";
+import { LiveTile } from "../components/LiveTile";
+import { PosterCard } from "../components/PosterCard";
+import { SeriesDetail } from "../components/SeriesDetail";
 import { cn } from "../lib/cn";
-import { useApp } from "../store/app";
-import type { Channel, EpgEntry } from "../../shared/types";
+import { useApp, type Page } from "../store/app";
+import type { Channel } from "../../shared/types";
 
 export function Home() {
-  const channels = useApp((s) => s.channels);
+  const channels = useApp((s) => s.browseChannels);
+  const movies = useApp((s) => s.browseMovies);
+  const series = useApp((s) => s.browseSeries);
   const sources = useApp((s) => s.sources);
   const setPage = useApp((s) => s.setPage);
+  const loadSeriesInfo = useApp((s) => s.loadSeriesInfo);
+  const selectedSeries = useApp((s) => s.selectedSeries);
+  const recentChannels = useApp((s) => s.recentChannels);
   const favorites = useApp((s) => s.favorites);
-  const recentChannelIds = useApp((s) => s.recentChannelIds);
   const epg = useApp((s) => s.epg);
   const refreshEpg = useApp((s) => s.refreshEpgForVisible);
 
-  const favoriteChannels = useMemo(
-    () => channels.filter((c) => favorites.has(c.id)),
-    [channels, favorites],
+  const catalog = useMemo(
+    () => [...movies, ...series, ...channels],
+    [movies, series, channels],
   );
 
-  const [featured, setFeatured] = useState<Channel | null>(null);
+  const [spotlight, setSpotlight] = useState<Channel | null>(null);
 
   useLayoutEffect(() => {
-    if (favoriteChannels.length === 0) {
-      setFeatured(null);
-      return;
-    }
-    const pick =
-      favoriteChannels[Math.floor(Math.random() * favoriteChannels.length)] ??
-      null;
-    setFeatured(pick);
-  }, [favoriteChannels]);
+    setSpotlight(
+      pickSpotlight(
+        catalog,
+        recentChannels.map((c) => c.id),
+        favorites,
+      ),
+    );
+  }, [catalog, recentChannels, favorites]);
 
-  const favListOrdered = useMemo(() => {
-    const rank = new Map(recentChannelIds.map((id, i) => [id, i]));
-    const favChannels = channels.filter((c) => favorites.has(c.id));
-    favChannels.sort((a, b) => {
-      const ra = rank.has(a.id) ? rank.get(a.id)! : 999_999;
-      const rb = rank.has(b.id) ? rank.get(b.id)! : 999_999;
-      if (ra !== rb) return ra - rb;
-      return a.name.localeCompare(b.name);
-    });
-    return favChannels.slice(0, 18);
-  }, [channels, favorites, recentChannelIds]);
+  const continueWatching = useMemo(() => {
+    const byId = new Map(catalog.map((c) => [c.id, c]));
+    const out: Channel[] = [];
+    for (const recent of recentChannels) {
+      if (recent.kind === "series" && !recent.url) continue;
+      out.push(byId.get(recent.id) ?? recent);
+      if (out.length >= 14) break;
+    }
+    return out;
+  }, [catalog, recentChannels]);
+
+  const favoriteItems = useMemo(
+    () => catalog.filter((c) => favorites.has(c.id)).slice(0, 14),
+    [catalog, favorites],
+  );
+
+  const sportRail = filterByGroup(channels, ["sport", "espn", "nfl", "nba"]);
+  const newsRail = filterByGroup(channels, ["news", "cnn", "bbc", "fox"]);
 
   useEffect(() => {
-    const id = featured?.epgChannelId;
-    if (!id) return;
-    void refreshEpg([id]);
-  }, [featured?.id, featured?.epgChannelId, refreshEpg]);
+    const ids = spotlight?.epgChannelId ? [spotlight.epgChannelId] : [];
+    if (ids.length) void refreshEpg(ids);
+  }, [spotlight?.id, spotlight?.epgChannelId, refreshEpg]);
 
   if (sources.length === 0) {
     return <EmptyHome onSetup={() => setPage("settings")} />;
   }
 
-  // Build genre rails by matching loose keyword groups so the home feed
-  // adapts to whatever the user's playlist actually contains.
-  const sportRail = filterByGroup(channels, ["sport", "espn", "nfl", "nba"]);
-  const newsRail = filterByGroup(channels, ["news", "cnn", "bbc", "fox"]);
-  const movieRail = filterByGroup(channels, ["movie", "cinema", "hbo", "film"]);
-  const entertainmentRail = filterByGroup(channels, [
-    "entertain",
-    "general",
-    "comedy",
-    "drama",
-  ]);
+  const hasXtream = sources.some((s) => s.kind === "xtream");
+  const greeting = timeGreeting();
 
   return (
-    <div>
-      {featured && (
-        <Hero
-          channel={featured}
-          epg={featured.epgChannelId ? epg[featured.epgChannelId] : undefined}
+    <div className="pb-6">
+      {spotlight && (
+        <HomeSpotlight
+          channel={spotlight}
+          epg={
+            spotlight.epgChannelId
+              ? epg[spotlight.epgChannelId]
+              : undefined
+          }
+          onSeriesOpen={(c) => void loadSeriesInfo(c)}
         />
       )}
 
-      <div className="space-y-10 px-8 pb-4 pt-10">
-      {favListOrdered.length > 0 && (
-        <Rail
-          icon={Heart}
-          title="Continue Watching"
-          subtitle="Pick up where you left off"
-          channels={favListOrdered}
-          onMore={() => setPage("favorites")}
-        />
-      )}
+      <div className="home-content space-y-11 px-8 pt-10">
+        <header>
+          <h2 className="text-[28px] font-semibold tracking-tightest text-text-primary">
+            {greeting}
+          </h2>
+          <p className="mt-1 text-[14px] text-text-muted">
+            Live TV, movies, and series — all in one place.
+          </p>
+        </header>
 
-      <Rail
-        icon={Radio}
-        title="Live Channels"
-        subtitle="Streaming right now"
-        channels={channels.slice(0, 18)}
-        onMore={() => setPage("live")}
-      />
+        <BrowseShortcuts setPage={setPage} hasXtream={hasXtream} />
 
-      {sportRail.length > 0 && (
-        <Rail
-          icon={Trophy}
-          title="Sports Tonight"
-          subtitle="Live games and highlights"
-          channels={sportRail.slice(0, 18)}
-          onMore={() => setPage("live")}
-        />
-      )}
+        {continueWatching.length > 0 && (
+          <MixedRail
+            title="Continue Watching"
+            channels={continueWatching}
+            onMore={() => setPage("favorites")}
+            onSeriesOpen={(c) => void loadSeriesInfo(c)}
+          />
+        )}
 
-      {movieRail.length > 0 && (
-        <Rail
-          icon={Film}
-          title="Popular Movies"
-          subtitle="Cinema picks across your providers"
-          channels={movieRail.slice(0, 18)}
-          onMore={() => setPage("live")}
-        />
-      )}
+        {movies.length > 0 && (
+          <PosterRail
+            title="Movies"
+            channels={movies.slice(0, 16)}
+            onMore={() => setPage("movies")}
+          />
+        )}
 
-      {newsRail.length > 0 && (
-        <Rail
-          icon={Newspaper}
-          title="News Around the Clock"
-          subtitle="Headlines from around the world"
-          channels={newsRail.slice(0, 18)}
-          onMore={() => setPage("live")}
-        />
-      )}
+        {series.length > 0 && (
+          <PosterRail
+            title="TV Shows"
+            channels={series.slice(0, 16)}
+            onMore={() => setPage("tv")}
+            onSeriesOpen={(c) => void loadSeriesInfo(c)}
+          />
+        )}
 
-      {entertainmentRail.length > 0 && (
-        <Rail
-          icon={Tv}
-          title="Entertainment"
-          subtitle="Series, talk shows and more"
-          channels={entertainmentRail.slice(0, 18)}
-          onMore={() => setPage("live")}
-        />
-      )}
+        {channels.length > 0 && (
+          <LiveRail
+            title="Live Now"
+            channels={channels.slice(0, 16)}
+            onMore={() => setPage("live")}
+          />
+        )}
+
+        {sportRail.length > 0 && (
+          <LiveRail
+            title="Sports"
+            channels={sportRail.slice(0, 14)}
+            onMore={() => setPage("live")}
+          />
+        )}
+
+        {newsRail.length > 0 && (
+          <LiveRail
+            title="News"
+            channels={newsRail.slice(0, 14)}
+            onMore={() => setPage("live")}
+          />
+        )}
+
+        {favoriteItems.length > 0 && continueWatching.length === 0 && (
+          <MixedRail
+            title="Your Favorites"
+            channels={favoriteItems}
+            onMore={() => setPage("favorites")}
+            onSeriesOpen={(c) => void loadSeriesInfo(c)}
+          />
+        )}
       </div>
+
+      {selectedSeries && <SeriesDetail />}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
- * Hero
- * ──────────────────────────────────────────────────────────────────────── */
-type HeroTheme = "default" | "sport" | "news" | "movie" | "entertainment";
+/* ── Browse shortcuts (Apple TV–style) ─────────────────────────────────── */
 
-function heroThemeFromGroup(group?: string): HeroTheme {
-  const g = (group ?? "").toLowerCase();
-  if (/sport|espn|nfl|nba|football|soccer|mlb|nhl/.test(g)) return "sport";
-  if (/news|cnn|bbc|fox|msnbc|headline/.test(g)) return "news";
-  if (/movie|cinema|hbo|film|showtime/.test(g)) return "movie";
-  if (/entertain|comedy|drama|music|series/.test(g)) return "entertainment";
-  return "default";
-}
-
-function formatEpgWindow(epg: EpgEntry) {
-  const opts: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  const start = new Date(epg.start).toLocaleTimeString([], opts);
-  const end = new Date(epg.end).toLocaleTimeString([], opts);
-  return `${start} – ${end}`;
-}
-
-function Hero({ channel, epg }: { channel: Channel; epg?: EpgEntry }) {
-  const play = useApp((s) => s.play);
-  const isFav = useApp((s) => s.favorites.has(channel.id));
-  const toggleFav = useApp((s) => s.toggleFavorite);
-  const theme = heroThemeFromGroup(channel.group);
-
-  const programTitle = epg?.title ?? channel.group ?? "Live channel";
-  const programMeta = epg
-    ? formatEpgWindow(epg)
-    : channel.group
-      ? `On ${channel.group}`
-      : "Streaming now";
+function BrowseShortcuts({
+  setPage,
+  hasXtream,
+}: {
+  setPage: (p: Page) => void;
+  hasXtream: boolean;
+}) {
+  const tiles: {
+    id: Page;
+    label: string;
+    icon: LucideIcon;
+    hidden?: boolean;
+  }[] = [
+    { id: "live", label: "Live TV", icon: Radio },
+    { id: "movies", label: "Movies", icon: Film, hidden: !hasXtream },
+    { id: "tv", label: "TV Shows", icon: Clapperboard, hidden: !hasXtream },
+    { id: "favorites", label: "Favorites", icon: Heart },
+  ];
 
   return (
-    <section
-      data-theme={theme}
-      className={cn(
-        "hero-spotlight relative w-full rounded-b-2xl shadow-hero",
-        "animate-fade-in",
-      )}
-    >
-      <div className="hero-spotlight-glow" aria-hidden />
-      <div className="hero-spotlight-grid" aria-hidden />
-      <div className="hero-spotlight-vignette" aria-hidden />
-
-      <div
-        className={cn(
-          "relative flex min-h-[min(62vh,680px)] flex-col justify-center gap-10",
-          "px-8 pb-14 pt-[calc(var(--titlebar-height)+2.75rem)]",
-          "lg:flex-row lg:items-center lg:justify-between lg:gap-12 lg:px-12 lg:pb-16 lg:pt-[calc(var(--titlebar-height)+3.25rem)]",
-        )}
-      >
-        <div className="max-w-2xl flex-1">
-          <span className="block text-[12px] font-medium uppercase tracking-wide text-text-secondary">
-            From your favorites
-          </span>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="badge badge-live border-white/15 bg-black/35 text-white backdrop-blur-md">
-              <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-red-400" />
-              Live
+    <div className="home-browse-grid">
+      {tiles
+        .filter((t) => !t.hidden)
+        .map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            onClick={() => setPage(tile.id)}
+            className="home-browse-tile group"
+          >
+            <span className="home-browse-tile-icon">
+              <tile.icon size={20} strokeWidth={1.75} />
             </span>
-            {channel.group && (
-              <span className="badge border-white/15 bg-black/30 text-white/90 backdrop-blur-md">
-                {channel.group}
-              </span>
-            )}
-          </div>
-
-          <h1 className="mt-5 text-[36px] font-semibold leading-[1.06] tracking-tightest text-white text-shadow-hero sm:text-[44px] lg:text-[48px]">
-            {programTitle}
-          </h1>
-
-          <p className="mt-2 text-[15px] font-medium text-white/55">
-            {channel.name}
-          </p>
-
-          {epg?.description && (
-            <p className="mt-3 line-clamp-2 max-w-xl text-[14px] leading-relaxed text-white/60">
-              {epg.description}
-            </p>
-          )}
-
-          <p className="mt-3 text-[12.5px] text-white/40">{programMeta}</p>
-
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => void play(channel)}
-              className="btn-cta group"
-            >
-              <Play size={16} fill="currentColor" />
-              Watch Now
-            </button>
-            <button
-              type="button"
-              onClick={() => void toggleFav(channel.id)}
-              className={cn(
-                "inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] text-white backdrop-blur-md transition-colors hover:bg-white/[0.12]",
-                isFav && "border-[#ff375f]/40 bg-[#ff375f]/15 text-[#ff9eb5]",
-              )}
-              title={isFav ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Heart size={18} fill={isFav ? "currentColor" : "none"} />
-            </button>
-          </div>
-        </div>
-
-        <HeroEmblem channel={channel} epg={epg} />
-      </div>
-    </section>
+            <span className="text-[13px] font-medium tracking-tight text-text-primary">
+              {tile.label}
+            </span>
+          </button>
+        ))}
+    </div>
   );
 }
 
-function HeroEmblem({
-  channel,
-  epg,
+/* ── Rails ─────────────────────────────────────────────────────────────── */
+
+function SectionHeader({
+  title,
+  onMore,
 }: {
-  channel: Channel;
-  epg?: EpgEntry;
+  title: string;
+  onMore?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center lg:items-end">
-      <div className="hero-emblem">
-        <span className="hero-emblem-ring" aria-hidden />
-        <div className="hero-emblem-card">
-          {channel.logo ? (
-            <img
-              src={channel.logo}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="max-h-full max-w-full object-contain"
-            />
-          ) : (
-            <Tv size={36} className="text-white/50" strokeWidth={1.25} />
-          )}
-        </div>
-      </div>
-
-      {epg && (
-        <div className="hero-now-card hidden sm:block">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-white/45">
-            On now
-          </p>
-          <p className="mt-0.5 line-clamp-2 text-[12px] font-medium leading-snug text-white/85">
-            {epg.title}
-          </p>
-          <p className="mt-1 text-[11px] text-white/45">
-            {formatEpgWindow(epg)}
-          </p>
-        </div>
+    <div className="mb-4 flex items-baseline justify-between gap-4 px-0.5">
+      <h3 className="text-[21px] font-semibold tracking-tight text-text-primary">
+        {title}
+      </h3>
+      {onMore && (
+        <button
+          type="button"
+          onClick={onMore}
+          className="inline-flex shrink-0 items-center gap-0.5 text-[13px] font-medium text-text-muted transition-colors hover:text-text-primary"
+        >
+          See All
+          <ChevronRight size={14} />
+        </button>
       )}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
- * Generic horizontal channel rail
- * ──────────────────────────────────────────────────────────────────────── */
-interface RailProps {
-  icon: LucideIcon;
-  title: string;
-  subtitle?: string;
-  channels: Channel[];
-  onMore?: () => void;
-}
-
-function Rail({ icon: Icon, title, subtitle, channels, onMore }: RailProps) {
-  const epg = useApp((s) => s.epg);
-  const railRef = useRef<HTMLDivElement | null>(null);
+function ScrollRail({
+  children,
+  ariaLabel,
+}: {
+  children: ReactNode;
+  ariaLabel: string;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
-    if (!railRef.current) return;
+    if (!ref.current) return;
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      railRef.current.scrollBy({ left: 360, behavior: "smooth" });
+      ref.current.scrollBy({ left: 320, behavior: "smooth" });
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      railRef.current.scrollBy({ left: -360, behavior: "smooth" });
+      ref.current.scrollBy({ left: -320, behavior: "smooth" });
     }
   }
 
   return (
-    <section>
-      <div className="mb-3 flex items-end justify-between px-1">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-mac-fill text-text-secondary">
-            <Icon size={14} />
-          </div>
-          <div>
-            <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">
-              {title}
-            </h2>
-            {subtitle && (
-              <p className="text-[11.5px] text-text-muted">{subtitle}</p>
-            )}
-          </div>
-        </div>
-        {onMore && (
-          <button
-            onClick={onMore}
-            className="glass-pill-nav-item px-3 py-1 text-[12px] !text-white/80 hover:!text-white"
-          >
-            See all <ArrowRight size={11} />
-          </button>
-        )}
-      </div>
+    <div
+      ref={ref}
+      tabIndex={0}
+      onKeyDown={onKey}
+      aria-label={ariaLabel}
+      className="home-rail -mx-1 flex gap-4 overflow-x-auto px-1 py-1 outline-none"
+    >
+      {children}
+    </div>
+  );
+}
 
-      <div className="-mx-2">
-        <div
-          ref={railRef}
-          tabIndex={0}
-          onKeyDown={onKey}
-          className="rail flex gap-3 overflow-x-auto px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-white/25 rounded-xl"
-        >
-          {channels.map((c) => (
-            <div key={c.id} className="w-[200px] shrink-0">
-              <ChannelCard
-                channel={c}
-                epg={c.epgChannelId ? epg[c.epgChannelId] : undefined}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+function PosterRail({
+  title,
+  channels,
+  onMore,
+  onSeriesOpen,
+}: {
+  title: string;
+  channels: Channel[];
+  onMore?: () => void;
+  onSeriesOpen?: (c: Channel) => void;
+}) {
+  return (
+    <section>
+      <SectionHeader title={title} onMore={onMore} />
+      <ScrollRail ariaLabel={title}>
+        {channels.map((c) => (
+          <div key={c.id} className="w-[128px] shrink-0">
+            <PosterCard
+              channel={c}
+              onSelect={
+                c.kind === "series" && !c.url ? onSeriesOpen : undefined
+              }
+            />
+          </div>
+        ))}
+      </ScrollRail>
     </section>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
- * Empty state
- * ──────────────────────────────────────────────────────────────────────── */
+function LiveRail({
+  title,
+  channels,
+  onMore,
+}: {
+  title: string;
+  channels: Channel[];
+  onMore?: () => void;
+}) {
+  const epg = useApp((s) => s.epg);
+  const refreshEpg = useApp((s) => s.refreshEpgForVisible);
+
+  useEffect(() => {
+    const ids = channels
+      .map((c) => c.epgChannelId)
+      .filter((id): id is string => Boolean(id));
+    if (ids.length) void refreshEpg(ids);
+  }, [channels, refreshEpg]);
+
+  return (
+    <section>
+      <SectionHeader title={title} onMore={onMore} />
+      <ScrollRail ariaLabel={title}>
+        {channels.map((c) => (
+          <LiveTile
+            key={c.id}
+            channel={c}
+            epg={c.epgChannelId ? epg[c.epgChannelId] : undefined}
+          />
+        ))}
+      </ScrollRail>
+    </section>
+  );
+}
+
+function MixedRail({
+  title,
+  channels,
+  onMore,
+  onSeriesOpen,
+}: {
+  title: string;
+  channels: Channel[];
+  onMore?: () => void;
+  onSeriesOpen?: (c: Channel) => void;
+}) {
+  const epg = useApp((s) => s.epg);
+  const refreshEpg = useApp((s) => s.refreshEpgForVisible);
+
+  useEffect(() => {
+    const ids = channels
+      .map((c) => c.epgChannelId)
+      .filter((id): id is string => Boolean(id));
+    if (ids.length) void refreshEpg(ids);
+  }, [channels, refreshEpg]);
+
+  return (
+    <section>
+      <SectionHeader title={title} onMore={onMore} />
+      <ScrollRail ariaLabel={title}>
+        {channels.map((c) =>
+          c.kind === "live" ? (
+            <LiveTile
+              key={c.id}
+              channel={c}
+              epg={c.epgChannelId ? epg[c.epgChannelId] : undefined}
+            />
+          ) : (
+            <div key={c.id} className="w-[128px] shrink-0">
+              <PosterCard
+                channel={c}
+                onSelect={
+                  c.kind === "series" && !c.url ? onSeriesOpen : undefined
+                }
+              />
+            </div>
+          ),
+        )}
+      </ScrollRail>
+    </section>
+  );
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────── */
+
 function EmptyHome({ onSetup }: { onSetup: () => void }) {
   return (
     <div className="flex h-[78vh] flex-col items-center justify-center px-8 text-center">
@@ -413,9 +418,50 @@ function EmptyHome({ onSetup }: { onSetup: () => void }) {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────
- * Helpers
- * ──────────────────────────────────────────────────────────────────────── */
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function pickSpotlight(
+  catalog: Channel[],
+  recentIds: string[],
+  favorites: Set<string>,
+): Channel | null {
+  if (catalog.length === 0) return null;
+
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+
+  for (const id of recentIds) {
+    const c = byId.get(id);
+    if (c?.logo) return c;
+  }
+
+  const vodWithPoster = catalog.filter(
+    (c) => (c.kind === "movie" || c.kind === "series") && c.logo,
+  );
+  if (vodWithPoster.length > 0) {
+    const pool = vodWithPoster.slice(0, 24);
+    return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+  }
+
+  for (const id of recentIds) {
+    const c = byId.get(id);
+    if (c) return c;
+  }
+
+  const fav = catalog.filter((c) => favorites.has(c.id) && c.logo);
+  if (fav.length > 0) {
+    return fav[Math.floor(Math.random() * fav.length)] ?? fav[0];
+  }
+
+  return catalog.find((c) => c.logo) ?? catalog[0];
+}
+
 function filterByGroup(channels: Channel[], keywords: string[]): Channel[] {
   const out: Channel[] = [];
   for (const c of channels) {

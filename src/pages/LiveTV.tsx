@@ -4,8 +4,9 @@ import { cn } from "../lib/cn";
 import { useApp } from "../store/app";
 
 export function LiveTV() {
-  const channels = useApp((s) => s.channels);
-  const categories = useApp((s) => s.categories);
+  const channels = useApp((s) => s.browseChannels);
+  const categories = useApp((s) => s.browseCategories);
+  const contentFilterActive = useApp((s) => s.contentFilterActive);
   const loading = useApp((s) => s.channelsLoading);
   const error = useApp((s) => s.channelsError);
   const sources = useApp((s) => s.sources);
@@ -20,7 +21,11 @@ export function LiveTV() {
   }, [channels, activeCat]);
 
   const categoryRows = useMemo(() => {
-    const all = { id: "__all", name: "All Channels", count: channels.length };
+    const all = {
+      id: "__all",
+      name: "All Channels",
+      count: channels.length,
+    };
     const rest = categories.map((c) => ({
       id: c.id,
       name: c.name,
@@ -54,6 +59,12 @@ export function LiveTV() {
         {error && (
           <div className="mt-2 rounded-lg border border-[#ff453a]/30 bg-[#ff453a]/10 px-4 py-3 text-sm text-[#ff9f9a]">
             {error}
+          </div>
+        )}
+
+        {contentFilterActive && channels.length === 0 && !loading && (
+          <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-text-muted">
+            No channels match your country or language filter. Adjust it in Settings.
           </div>
         )}
 

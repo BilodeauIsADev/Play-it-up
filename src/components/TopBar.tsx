@@ -4,17 +4,20 @@ import {
   LayoutGrid,
   List,
   Plus,
+  Search as SearchIcon,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useApp, type Page } from "../store/app";
 import { cn } from "../lib/cn";
 import appLogo from "../../Assets/Play-it-uplogo.png";
 
-const NAV_TABS: { id: Page; label: string }[] = [
+const NAV_TABS: { id: Page; label: string; icon?: "search" }[] = [
   { id: "home", label: "Home" },
   { id: "live", label: "Live TV" },
+  { id: "movies", label: "Movies" },
+  { id: "tv", label: "TV Shows" },
   { id: "favorites", label: "Favorites" },
-  { id: "search", label: "Search" },
+  { id: "search", label: "Search", icon: "search" },
 ];
 
 export function TopBar() {
@@ -51,6 +54,7 @@ export function TopBar() {
         <div className="glass-pill-nav">
           {NAV_TABS.map((tab) => {
             const active = page === tab.id;
+            const isIcon = tab.icon === "search";
             return (
               <button
                 key={tab.id}
@@ -58,10 +62,14 @@ export function TopBar() {
                 onClick={() => setPage(tab.id)}
                 className={cn(
                   "glass-pill-nav-item",
+                  isIcon && "!h-8 !w-8 !px-0",
                   active && "glass-pill-nav-item-active",
                 )}
+                title={tab.label}
+                aria-label={tab.label}
+                aria-current={active ? "page" : undefined}
               >
-                {tab.label}
+                {isIcon ? <SearchIcon size={14} /> : tab.label}
               </button>
             );
           })}
@@ -105,17 +113,24 @@ function ContextActions() {
   const channelSortMode = useApp((s) => s.channelSortMode);
   const cycleChannelSortMode = useApp((s) => s.cycleChannelSortMode);
 
-  if (page !== "live" && page !== "favorites") return null;
+  if (
+    page !== "live" &&
+    page !== "movies" &&
+    page !== "tv" &&
+    page !== "favorites"
+  )
+    return null;
 
   return (
     <div className="glass-pill no-drag flex items-center gap-0.5 px-1 py-1">
       <button
         type="button"
-        className="glass-pill-nav-item hidden px-3 py-1.5 sm:inline-flex"
+        className="glass-pill-nav-item !h-8 !w-8 !px-0"
         onClick={() => setPage("settings")}
+        title="Add source"
+        aria-label="Add source"
       >
-        <Plus size={13} className="mr-1 opacity-80" />
-        Add source
+        <Plus size={13} />
       </button>
       <ViewToggle />
       <button

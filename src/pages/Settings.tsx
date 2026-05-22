@@ -5,6 +5,7 @@ import {
   Download,
   ExternalLink,
   FolderOpen,
+  Globe,
   Plus,
   RefreshCw,
   RotateCw,
@@ -16,6 +17,7 @@ import {
 import { useEffect, useState } from "react";
 import { bridge } from "../lib/bridge";
 import { cn } from "../lib/cn";
+import { COUNTRY_OPTIONS, LANGUAGE_OPTIONS } from "../lib/countryFilter";
 import { useApp } from "../store/app";
 import type {
   AppSettings,
@@ -27,6 +29,7 @@ import type {
 export function Settings() {
   const sources = useApp((s) => s.sources);
   const clearUpdateNudge = useApp((s) => s.clearUpdateNudge);
+  const loadSettings = useApp((s) => s.loadSettings);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [mpv, setMpv] = useState<MpvProbeResult | null>(null);
   const [adding, setAdding] = useState(false);
@@ -42,6 +45,7 @@ export function Settings() {
   async function patch(p: Partial<AppSettings>) {
     const next = await bridge().invoke("settings:set", p);
     setSettings(next);
+    await loadSettings();
   }
 
   return (
@@ -56,6 +60,16 @@ export function Settings() {
       </header>
 
       <AppUpdatesCard />
+
+      <Card title="Country & language filter">
+        <ContentFilterSettings
+          countries={settings?.countryFilter ?? []}
+          languages={settings?.languageFilter ?? []}
+          onCountriesChange={(countryFilter) => patch({ countryFilter })}
+          onLanguagesChange={(languageFilter) => patch({ languageFilter })}
+          onClear={() => patch({ countryFilter: [], languageFilter: [] })}
+        />
+      </Card>
 
       <Card title="Sources">
         <p className="-mt-1 mb-4 text-sm text-text-secondary">
@@ -656,6 +670,139 @@ function MpvInstallHelp({ platform }: { platform: NodeJS.Platform }) {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ContentFilterSettings({
+  countries,
+  languages,
+  onCountriesChange,
+  onLanguagesChange,
+  onClear,
+}: {
+  countries: string[];
+  languages: string[];
+  onCountriesChange: (countries: string[]) => void;
+  onLanguagesChange: (languages: string[]) => void;
+  onClear: () => void;
+}) {
+  const active = countries.length > 0 || languages.length > 0;
+
+  function toggleCountry(code: string) {
+    const next = countries.includes(code)
+      ? countries.filter((c) => c !== code)
+      : [...countries, code];
+    onCountriesChange(next);
+  }
+
+  function toggleLanguage(code: string) {
+    const next = languages.includes(code)
+      ? languages.filter((c) => c !== code)
+      : [...languages, code];
+    onLanguagesChange(next);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start gap-3 text-sm text-text-secondary">
+        <Globe size={18} className="mt-0.5 shrink-0 text-text-muted" />
+        <div>
+          <p>
+            Limit Live TV, Movies, and TV Shows to matching categories.
+            Leave all unselected to show everything.
+          </p>
+          <p className="mt-1.5 text-[12px] text-text-muted">
+            Matches names like{" "}
+            <span className="font-mono text-text-secondary">US | Sports</span>,{" "}
+            <span className="font-mono text-text-secondary">EN ◉ Anime</span>, or{" "}
+            <span className="font-mono text-text-secondary">DE | Netflix</span>.
+            Country and language selections combine with OR logic.
+          </p>
+        </div>
+      </div>
+
+      {active && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onClear}
+            className="pill border border-border-subtle bg-bg-elevated px-3 py-1 text-[12px] text-text-secondary transition-colors hover:bg-bg-panel"
+          >
+            Clear all filters
+          </button>
+          <span className="text-[12px] text-text-muted">
+            {countries.length} countr{countries.length === 1 ? "y" : "ies"}
+            {countries.length > 0 && languages.length > 0 ? ", " : ""}
+            {languages.length > 0
+              ? `${languages.length} language${languages.length === 1 ? "" : "s"}`
+              : ""}
+          </span>
+        </div>
+      )}
+
+      <FilterGroup
+        title="Countries"
+        hint="Geo-based categories (US, CA, UK…)"
+        options={COUNTRY_OPTIONS}
+        selected={countries}
+        onToggle={toggleCountry}
+      />
+
+      <FilterGroup
+        title="Languages"
+        hint="Language prefixes (EN, DE, FR…)"
+        options={LANGUAGE_OPTIONS}
+        selected={languages}
+        onToggle={toggleLanguage}
+      />
+    </div>
+  );
+}
+
+function FilterGroup({
+  title,
+  hint,
+  options,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  hint: string;
+  options: { code: string; label: string }[];
+  selected: string[];
+  onToggle: (code: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="text-[13px] font-medium text-text-primary">{title}</div>
+        <div className="text-[11px] text-text-muted">{hint}</div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const active = selected.includes(option.code);
+          return (
+            <button
+              key={option.code}
+              type="button"
+              onClick={() => onToggle(option.code)}
+              className={cn(
+                "pill border px-3 py-1.5 text-[12px] transition-colors",
+                active
+                  ? "border-transparent bg-white font-medium text-bg-base"
+                  : "border-border-subtle bg-bg-elevated text-text-secondary hover:bg-bg-panel",
+              )}
+              title={option.label}
+            >
+              {option.code}
+              <span className="ml-1.5 hidden sm:inline opacity-70">
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

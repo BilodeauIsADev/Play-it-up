@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge } from "../lib/bridge";
+import { isVodChannel } from "../lib/mediaKind";
 import { useApp } from "../store/app";
 import { cn } from "../lib/cn";
 import type { AppSettings } from "../../shared/types";
@@ -31,6 +32,12 @@ export function PlayerSurface() {
   const visible = Boolean(nowPlaying) && !collapsed;
   const web = settings?.playbackMode === "web";
   const embedded = settings?.playbackMode === "embedded";
+  const isVod = nowPlaying ? isVodChannel(nowPlaying) : false;
+
+  const showPlayerChrome =
+    player.state === "loading" ||
+    player.state === "buffering" ||
+    player.state === "error";
 
   useLayoutEffect(() => {
     if (!embedded) {
@@ -77,11 +84,6 @@ export function PlayerSurface() {
 
   if (!nowPlaying) return null;
 
-  const showTitlebarChrome =
-    player.state === "loading" ||
-    player.state === "buffering" ||
-    player.state === "error";
-
   return (
     <div
       ref={surfaceRootRef}
@@ -126,11 +128,16 @@ export function PlayerSurface() {
           )}
 
           {!collapsed && (
-            <div className="player-titlebar-zone">
+            <div
+              className={cn(
+                "player-titlebar-zone",
+                !showPlayerChrome && "player-titlebar-zone--hidden",
+              )}
+            >
               <header
                 className={cn(
                   "player-titlebar",
-                  !showTitlebarChrome && "player-titlebar--hidden",
+                  !showPlayerChrome && "player-titlebar--hidden",
                 )}
               >
                 <div className="no-drag min-w-0 max-w-[min(42vw,520px)] pl-1">
@@ -138,7 +145,8 @@ export function PlayerSurface() {
                     {nowPlaying.name}
                   </div>
                   <div className="truncate text-xs text-white/55">
-                    {nowPlaying.group ?? "Live"}
+                    {nowPlaying.group ??
+                      (isVod ? "On demand" : "Live")}
                   </div>
                 </div>
                 <div
@@ -153,6 +161,10 @@ export function PlayerSurface() {
                 ) : player.state === "error" ? (
                   <span className="no-drag shrink-0 rounded-full bg-red-500/20 px-2.5 py-1 text-xs text-red-200">
                     {player.message ?? "Error"}
+                  </span>
+                ) : isVod ? (
+                  <span className="no-drag shrink-0 rounded-full bg-black/30 px-2.5 py-1 text-xs text-white/80 backdrop-blur-md">
+                    {nowPlaying.kind === "movie" ? "Movie" : "Episode"}
                   </span>
                 ) : (
                   <span className="no-drag shrink-0 rounded-full bg-black/30 px-2.5 py-1 text-xs text-white/80 backdrop-blur-md">
@@ -202,7 +214,7 @@ function OwnWindowPlaceholder({
             <img
               src={logo}
               alt=""
-              className="h-full w-full object-contain p-3"
+              className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
             />
           ) : (

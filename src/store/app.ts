@@ -5,12 +5,23 @@ import type {
   Category,
   EpgEntry,
   PlayerStatus,
+  SeriesInfo,
   Source,
+  StreamKind,
 } from "../../shared/types";
 import { bridge } from "../lib/bridge";
 import { dispatchWebPlayerCommand } from "../lib/webPlayerCommands";
+import { enrichPlaybackChannel } from "../lib/mediaKind";
+import { computeBrowseFilters, EMPTY_BROWSE } from "../lib/browseFilters";
 
-export type Page = "home" | "live" | "favorites" | "search" | "settings";
+export type Page =
+  | "home"
+  | "live"
+  | "movies"
+  | "tv"
+  | "favorites"
+  | "search"
+  | "settings";
 export type ChannelViewMode = "grid" | "list";
 export type ChannelSortMode = "none" | "name-asc" | "name-desc";
 
@@ -31,11 +42,38 @@ interface AppState {
   channelsLoading: boolean;
   channelsError: string | null;
 
+  movies: Channel[];
+  movieCategories: Category[];
+  moviesLoading: boolean;
+  moviesError: string | null;
+
+  series: Channel[];
+  seriesCategories: Category[];
+  seriesLoading: boolean;
+  seriesError: string | null;
+
+  /** Pre-filtered browse lists (recomputed when catalog or filter settings change). */
+  browseChannels: Channel[];
+  browseCategories: Category[];
+  browseMovies: Channel[];
+  browseMovieCategories: Category[];
+  browseSeries: Channel[];
+  browseSeriesCategories: Category[];
+  contentFilterActive: boolean;
+
+  selectedSeries: Channel | null;
+  seriesInfo: SeriesInfo | null;
+  seriesInfoLoading: boolean;
+  seriesInfoError: string | null;
+  setSelectedSeries: (series: Channel | null) => void;
+  loadSeriesInfo: (series: Channel) => Promise<void>;
+  clearSeriesInfo: () => void;
+
   favorites: Set<string>;
   toggleFavorite: (channelId: string) => Promise<void>;
 
-  /** Most recently played channels first (for Continue Watching order). */
-  recentChannelIds: string[];
+  /** Most recently played items first (full channel snapshots for Continue Watching). */
+  recentChannels: Channel[];
 
   epg: Record<string, EpgEntry | undefined>;
 
@@ -50,9 +88,13 @@ interface AppState {
   updateNudgeVersion: string | null;
   clearUpdateNudge: () => void;
 
+  settings: AppSettings | null;
+  loadSettings: () => Promise<void>;
+
   init: () => Promise<void>;
   refreshSources: () => Promise<void>;
   loadChannels: (sourceId: string) => Promise<void>;
+  loadContent: (sourceId: string, kind: StreamKind) => Promise<void>;
   refreshEpgForVisible: (channelIds: string[]) => Promise<void>;
   play: (channel: Channel) => Promise<void>;
   stop: () => void;
@@ -67,27 +109,49 @@ let initialized = false;
 
 const RECENT_CHANNELS_KEY = "play-it-up-recent-channels";
 
-function loadRecentChannelIds(): string[] {
+function loadRecentChannels(): Channel[] {
   try {
     const raw = localStorage.getItem(RECENT_CHANNELS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string");
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
+    if (typeof parsed[0] === "object" && parsed[0] !== null && "id" in parsed[0]) {
+      return (parsed as Channel[]).filter((c) => typeof c.id === "string");
+    }
+    return [];
   } catch {
     return [];
   }
 }
 
-function persistRecentChannelIds(ids: string[]) {
+function persistRecentChannels(channels: Channel[]) {
   try {
     localStorage.setItem(
       RECENT_CHANNELS_KEY,
-      JSON.stringify(ids.slice(0, 200)),
+      JSON.stringify(channels.slice(0, 200)),
     );
   } catch {
     /* quota / private mode */
   }
+}
+
+function withBrowseFilters(
+  patch: Partial<AppState>,
+  base: AppState,
+): Partial<AppState> {
+  const next = { ...base, ...patch };
+  return {
+    ...patch,
+    ...computeBrowseFilters({
+      channels: next.channels,
+      categories: next.categories,
+      movies: next.movies,
+      movieCategories: next.movieCategories,
+      series: next.series,
+      seriesCategories: next.seriesCategories,
+      settings: next.settings,
+    }),
+  };
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -118,8 +182,54 @@ export const useApp = create<AppState>((set, get) => ({
   channelsLoading: false,
   channelsError: null,
 
+  movies: [],
+  movieCategories: [],
+  moviesLoading: false,
+  moviesError: null,
+
+  series: [],
+  seriesCategories: [],
+  seriesLoading: false,
+  seriesError: null,
+
+  ...EMPTY_BROWSE,
+
+  selectedSeries: null,
+  seriesInfo: null,
+  seriesInfoLoading: false,
+  seriesInfoError: null,
+  setSelectedSeries: (series) => set({ selectedSeries: series }),
+  loadSeriesInfo: async (series) => {
+    set({
+      selectedSeries: series,
+      seriesInfo: null,
+      seriesInfoLoading: true,
+      seriesInfoError: null,
+    });
+    try {
+      const info = await bridge().invoke(
+        "series:info",
+        series.sourceId,
+        series.providerId,
+      );
+      set({ seriesInfo: info, seriesInfoLoading: false });
+    } catch (err) {
+      set({
+        seriesInfoError: err instanceof Error ? err.message : String(err),
+        seriesInfoLoading: false,
+      });
+    }
+  },
+  clearSeriesInfo: () =>
+    set({
+      selectedSeries: null,
+      seriesInfo: null,
+      seriesInfoLoading: false,
+      seriesInfoError: null,
+    }),
+
   favorites: new Set<string>(),
-  recentChannelIds: [],
+  recentChannels: [],
   toggleFavorite: async (channelId) => {
     const isFav = await bridge().invoke("favorites:toggle", channelId);
     set((s) => {
@@ -141,6 +251,12 @@ export const useApp = create<AppState>((set, get) => ({
 
   updateNudgeVersion: null,
   clearUpdateNudge: () => set({ updateNudgeVersion: null }),
+
+  settings: null,
+  loadSettings: async () => {
+    const settings = await bridge().invoke("settings:get");
+    set((s) => withBrowseFilters({ settings }, { ...s, settings }));
+  },
 
   init: async () => {
     if (initialized) return;
@@ -175,9 +291,10 @@ export const useApp = create<AppState>((set, get) => ({
     const favs = await b.invoke("favorites:list");
     set({
       favorites: new Set(favs),
-      recentChannelIds: loadRecentChannelIds(),
+      recentChannels: loadRecentChannels(),
     });
 
+    await get().loadSettings();
     await get().refreshSources();
   },
 
@@ -194,21 +311,43 @@ export const useApp = create<AppState>((set, get) => ({
     if (!stillExists && sources[0]) {
       await get().loadChannels(sources[0].id);
     } else if (!sources[0]) {
-      set({ channels: [], categories: [] });
+      set((s) =>
+        withBrowseFilters(
+          {
+            channels: [],
+            categories: [],
+            movies: [],
+            movieCategories: [],
+            series: [],
+            seriesCategories: [],
+          },
+          s,
+        ),
+      );
     }
   },
 
-  loadChannels: async (sourceId) => {
-    set({ channelsLoading: true, channelsError: null });
+  loadContent: async (sourceId, kind) => {
+    const loadingKey =
+      kind === "movie"
+        ? "moviesLoading"
+        : kind === "series"
+          ? "seriesLoading"
+          : "channelsLoading";
+    const errorKey =
+      kind === "movie"
+        ? "moviesError"
+        : kind === "series"
+          ? "seriesError"
+          : "channelsError";
+
+    set({ [loadingKey]: true, [errorKey]: null } as Partial<AppState>);
     try {
       const { channels, categories } = await bridge().invoke(
         "channels:list",
         sourceId,
-        "live",
+        kind,
       );
-      // Defensive dedup: caches persisted before the provider-side dedup
-      // shipped may still contain repeats. Keep the first occurrence so
-      // React keys stay unique and we don't show the same card twice.
       const seen = new Set<string>();
       const deduped: Channel[] = [];
       for (const c of channels) {
@@ -216,16 +355,59 @@ export const useApp = create<AppState>((set, get) => ({
         seen.add(c.id);
         deduped.push(c);
       }
-      set({
-        channels: deduped,
-        categories,
-        channelsLoading: false,
-      });
+
+      if (kind === "movie") {
+        set((s) =>
+          withBrowseFilters(
+            {
+              movies: deduped,
+              movieCategories: categories,
+              moviesLoading: false,
+            },
+            s,
+          ),
+        );
+      } else if (kind === "series") {
+        set((s) =>
+          withBrowseFilters(
+            {
+              series: deduped,
+              seriesCategories: categories,
+              seriesLoading: false,
+            },
+            s,
+          ),
+        );
+      } else {
+        set((s) =>
+          withBrowseFilters(
+            {
+              channels: deduped,
+              categories,
+              channelsLoading: false,
+            },
+            s,
+          ),
+        );
+      }
     } catch (err) {
-      set({
-        channelsError: err instanceof Error ? err.message : String(err),
-        channelsLoading: false,
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      if (kind === "movie") {
+        set({ moviesError: message, moviesLoading: false });
+      } else if (kind === "series") {
+        set({ seriesError: message, seriesLoading: false });
+      } else {
+        set({ channelsError: message, channelsLoading: false });
+      }
+    }
+  },
+
+  loadChannels: async (sourceId) => {
+    await get().loadContent(sourceId, "live");
+    const src = get().sources.find((s) => s.id === sourceId);
+    if (src?.kind === "xtream") {
+      void get().loadContent(sourceId, "movie");
+      void get().loadContent(sourceId, "series");
     }
   },
 
@@ -245,21 +427,28 @@ export const useApp = create<AppState>((set, get) => ({
 
   play: async (channel) => {
     const settings = await bridge().invoke("settings:get");
+    const state = get();
+    const enriched = enrichPlaybackChannel(channel, {
+      movies: state.movies,
+      series: state.series,
+      seriesInfo: state.seriesInfo,
+      selectedSeries: state.selectedSeries,
+    });
 
     const bumpRecent = () => {
-      const prev = get().recentChannelIds;
-      const without = prev.filter((id) => id !== channel.id);
-      const next = [channel.id, ...without].slice(0, 200);
-      persistRecentChannelIds(next);
-      set({ recentChannelIds: next });
+      const prev = get().recentChannels;
+      const without = prev.filter((c) => c.id !== enriched.id);
+      const next = [enriched, ...without].slice(0, 200);
+      persistRecentChannels(next);
+      set({ recentChannels: next });
     };
 
     if (settings.playbackMode === "web") {
       await bridge().invoke("player:stop");
       set({
-        nowPlaying: channel,
+        nowPlaying: enriched,
         playbackMode: "web",
-        player: { state: "loading", channelId: channel.id },
+        player: { state: "loading", channelId: enriched.id },
         playerSurfaceCollapsed: false,
       });
       bumpRecent();
@@ -267,12 +456,12 @@ export const useApp = create<AppState>((set, get) => ({
     }
 
     set({
-      nowPlaying: channel,
+      nowPlaying: enriched,
       playbackMode: settings.playbackMode,
       playerSurfaceCollapsed: false,
     });
     bumpRecent();
-    await bridge().invoke("player:play", channel.id);
+    await bridge().invoke("player:play", enriched.id);
   },
 
   stop: () => {
