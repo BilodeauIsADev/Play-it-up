@@ -7,7 +7,7 @@ Dark, minimal UI with home rails, Live TV by category, favorites, search, and a 
 
 ## Status
 
-Current release line: **v0.2.x** — Live TV, favorites, search, multiple playback modes, Xtream short-EPG, encrypted credentials, and **in-app updates** from GitHub Releases (Windows NSIS + Linux AppImage).
+Current release line: **v0.3.x** — Live TV, favorites, search, VOD / series for Xtream, multiple playback modes, Xtream short-EPG, encrypted credentials, and **in-app updates** from GitHub Releases (Windows NSIS + Linux AppImage).
 
 Roadmap highlights: VOD / series for Xtream, richer EPG, catch-up, PiP, tighter macOS embedding.
 

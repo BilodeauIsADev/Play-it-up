@@ -51,6 +51,8 @@ function cacheKey(sourceId: string, kind: StreamKind): string {
   return `${sourceId}:${kind}`;
 }
 
+type ChannelListResult = { channels: Channel[]; categories: Category[] };
+
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "playitup-media",
@@ -405,37 +407,51 @@ function shouldPersistCache(
 
 function isUsableCache(
   kind: StreamKind,
-  data: { channels: Channel[]; categories: Category[] },
+  data: ChannelListResult,
 ): boolean {
   if (kind === "live") return true;
   return data.channels.length > 0;
 }
 
-async function loadChannelsForSource(
+function readChannelCache(
   sourceId: string,
-  kind: StreamKind = "live",
-): Promise<{ channels: Channel[]; categories: Category[] }> {
+  kind: StreamKind,
+  options: { allowExpired?: boolean } = {},
+): ChannelListResult | undefined {
   const key = cacheKey(sourceId, kind);
+  const maxAgeOk = (ts: number) =>
+    options.allowExpired || Date.now() - ts < CACHE_TTL_MS;
+
   const cached = channelCache.get(key);
-  if (
-    cached &&
-    Date.now() - cached.ts < CACHE_TTL_MS &&
-    isUsableCache(kind, cached)
-  ) {
+  if (cached && maxAgeOk(cached.ts) && isUsableCache(kind, cached)) {
     return { channels: cached.channels, categories: cached.categories };
   }
 
-  const persisted = store.getChannelCache<{
-    channels: Channel[];
-    categories: Category[];
-  }>(key);
+  const persisted = store.getChannelCache<ChannelListResult>(key);
   if (
     persisted &&
-    Date.now() - persisted.ts < CACHE_TTL_MS &&
+    maxAgeOk(persisted.ts) &&
     isUsableCache(kind, persisted.data)
   ) {
     channelCache.set(key, { ...persisted.data, ts: persisted.ts });
     return persisted.data;
+  }
+
+  return undefined;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function loadChannelsForSource(
+  sourceId: string,
+  kind: StreamKind = "live",
+  options: { forceRefresh?: boolean } = {},
+): Promise<ChannelListResult> {
+  if (!options.forceRefresh) {
+    const freshCache = readChannelCache(sourceId, kind);
+    if (freshCache) return freshCache;
   }
 
   const src = store.getSource(sourceId);
@@ -447,7 +463,7 @@ async function loadChannelsForSource(
   });
 
   try {
-    let result: { channels: Channel[]; categories: Category[] };
+    let result: ChannelListResult;
 
     if (src.kind === "xtream") {
       if (kind === "movie") {
@@ -479,6 +495,7 @@ async function loadChannelsForSource(
       throw new Error("Unknown source kind");
     }
 
+    const key = cacheKey(sourceId, kind);
     channelCache.set(key, { ...result, ts: Date.now() });
     if (shouldPersistCache(kind, result)) {
       store.setChannelCache(key, result);
@@ -486,6 +503,18 @@ async function loadChannelsForSource(
       store.clearChannelCache(key);
     }
     return result;
+  } catch (err) {
+    const staleCache = readChannelCache(sourceId, kind, {
+      allowExpired: true,
+    });
+    if (staleCache) {
+      console.warn(
+        `Using cached ${kind} list for source ${sourceId} after fetch failed:`,
+        errorMessage(err),
+      );
+      return staleCache;
+    }
+    throw err;
   } finally {
     mainWindow?.webContents.send("channels:loading", {
       sourceId,
@@ -601,33 +630,36 @@ function registerIpc(): void {
     "channels:refresh",
     async (_, sourceId: string, kind?: StreamKind) => {
       if (kind) {
-        channelCache.delete(cacheKey(sourceId, kind));
-        store.clearChannelCache(cacheKey(sourceId, kind));
         try {
-          await loadChannelsForSource(sourceId, kind);
+          await loadChannelsForSource(sourceId, kind, { forceRefresh: true });
           return { ok: true, message: "Refreshed." };
         } catch (err) {
           return {
             ok: false,
-            message: err instanceof Error ? err.message : String(err),
+            message: errorMessage(err),
           };
         }
       }
 
-      clearSourceCaches(sourceId);
-      try {
-        await Promise.all([
-          loadChannelsForSource(sourceId, "live"),
-          loadChannelsForSource(sourceId, "movie"),
-          loadChannelsForSource(sourceId, "series"),
-        ]);
+      const results = await Promise.allSettled([
+        loadChannelsForSource(sourceId, "live", { forceRefresh: true }),
+        loadChannelsForSource(sourceId, "movie", { forceRefresh: true }),
+        loadChannelsForSource(sourceId, "series", { forceRefresh: true }),
+      ]);
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length === 0) {
         return { ok: true, message: "Refreshed." };
-      } catch (err) {
-        return {
-          ok: false,
-          message: err instanceof Error ? err.message : String(err),
-        };
       }
+
+      return {
+        ok: false,
+        message: failures
+          .map((r) =>
+            r.status === "rejected" ? errorMessage(r.reason) : undefined,
+          )
+          .filter(Boolean)
+          .join("; "),
+      };
     },
   );
 

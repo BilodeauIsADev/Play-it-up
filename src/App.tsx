@@ -85,7 +85,7 @@ export function App() {
                       )
               }
             >
-            <div className="relative min-h-0 flex-1">
+            <div className="relative h-full min-h-0 flex-1">
               <div className={cn(page !== "home" && "hidden", page === "home" && "h-full")}>
                 <Home />
               </div>

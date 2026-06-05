@@ -55,7 +55,7 @@ export function LiveTV() {
         topBarHidden={Boolean(nowPlaying)}
       />
 
-      <div className="min-w-0 flex-1 min-h-0 overflow-y-auto py-1 pb-32 pr-8 pl-6">
+      <div className="h-full min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-contain py-1 pb-32 pr-8 pl-6">
         {error && (
           <div className="mt-2 rounded-lg border border-[#ff453a]/30 bg-[#ff453a]/10 px-4 py-3 text-sm text-[#ff9f9a]">
             {error}

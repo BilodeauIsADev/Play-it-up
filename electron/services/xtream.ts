@@ -94,6 +94,17 @@ interface XtreamUserInfo {
   };
 }
 
+export class XtreamHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly statusText: string,
+    public readonly url: string,
+  ) {
+    super(`HTTP ${status} ${statusText}`);
+    this.name = "XtreamHttpError";
+  }
+}
+
 function xtreamBase(src: XtreamSource): string {
   let base = (normalizeServerUrl(src.serverUrl) ?? src.serverUrl).replace(
     /\/+$/,
@@ -130,12 +141,41 @@ function parseXtreamList<T>(data: unknown): T[] {
   return [];
 }
 
-async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${res.statusText}`);
+function shouldRetryXtreamFetch(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === "AbortError") return false;
+  if (err instanceof XtreamHttpError) {
+    return err.status === 429 || err.status >= 500;
   }
-  return (await res.json()) as T;
+  return true;
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        signal,
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+        },
+      });
+      if (!res.ok) {
+        throw new XtreamHttpError(res.status, res.statusText, url);
+      }
+      return (await res.json()) as T;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 2 || !shouldRetryXtreamFetch(err)) break;
+      await delay(250 * (attempt + 1));
+    }
+  }
+
+  throw lastErr;
 }
 
 async function fetchXtreamList<T>(
@@ -148,7 +188,12 @@ async function fetchXtreamList<T>(
 /** Categories are optional on some panels — failure yields []. */
 async function fetchXtreamCategories<T>(url: string): Promise<T[]> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "VLC/3.0.20 LibVLC/3.0.20",
+      },
+    });
     if (!res.ok) return [];
     return parseXtreamList<T>(await res.json());
   } catch {
