@@ -89,9 +89,12 @@ function loadApi(): Api {
   const GetStockObject = gdi32.func(
     "uintptr __stdcall GetStockObject(int i)",
   ) as (i: number) => bigint | number;
-  const RegisterClassW = user32.func("stdcall", "RegisterClassW", "uint16", [
-    koffi.pointer(WNDCLASSW),
-  ]) as (wc: unknown) => number;
+  const RegisterClassW = user32.func(
+    "__stdcall",
+    "RegisterClassW",
+    "uint16",
+    [koffi.pointer(WNDCLASSW)],
+  ) as (wc: unknown) => number;
   const GetLastError = kernel32.func("uint32 __stdcall GetLastError()") as () => number;
 
   if (!classRegistered) {
