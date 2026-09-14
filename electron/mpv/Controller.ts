@@ -4,7 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { EventEmitter } from "node:events";
 import { MpvIpc } from "./ipc";
-import { PlayerWindow } from "./PlayerWindow";
+import { formatMpvWid, PlayerWindow } from "./PlayerWindow";
 import { probeMpv } from "./probe";
 import type {
   AppSettings,
@@ -28,6 +28,10 @@ export class MpvController extends EventEmitter {
   private status: PlayerStatus = { state: "idle" };
   private startingChannelId: string | undefined;
   private embedded = false;
+  // The renderer can report its surface while probeMpv is still awaiting IO.
+  // Keep that state even before the native host has been created.
+  private surfaceBounds = { x: 0, y: 0, width: 0, height: 0 };
+  private surfaceVisible = false;
 
   constructor(private mainWindow: BrowserWindow) {
     super();
@@ -58,6 +62,8 @@ export class MpvController extends EventEmitter {
     // Browser playback never reaches this controller.
     if (supportsEmbed && !this.playerWindow) {
       this.playerWindow = new PlayerWindow(this.mainWindow);
+      this.playerWindow.setBounds(this.surfaceBounds);
+      this.playerWindow.setVisible(this.surfaceVisible);
     }
 
     const args = this.buildArgs(settings, supportsEmbed);
@@ -147,7 +153,9 @@ export class MpvController extends EventEmitter {
       // on-screen controller and default keybinds so the host UI is the
       // sole input surface.
       const wid = this.playerWindow.getNativeId();
-      args.push(`--wid=${wid.toString()}`);
+      const widArg = formatMpvWid(wid);
+      console.log("[mpv] embed wid", widArg);
+      args.push(`--wid=${widArg}`);
       args.push("--osc=no", "--no-input-default-bindings", "--input-vo-keyboard=no");
       if (process.platform === "linux") {
         args.push("--vo=gpu,x11", "--gpu-context=x11egl", "--gpu-api=opengl");
@@ -312,10 +320,12 @@ export class MpvController extends EventEmitter {
     width: number;
     height: number;
   }): void {
+    this.surfaceBounds = { ...b };
     this.playerWindow?.setBounds(b);
   }
 
   setVisible(visible: boolean): void {
+    this.surfaceVisible = visible;
     this.playerWindow?.setVisible(visible);
   }
 

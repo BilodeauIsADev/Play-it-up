@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TopBar } from "./components/TopBar";
 import { PlayerSurface } from "./components/PlayerSurface";
 import { Home } from "./pages/Home";
@@ -8,17 +8,23 @@ import { TVShows } from "./pages/TVShows";
 import { Favorites } from "./pages/Favorites";
 import { Search } from "./pages/Search";
 import { Settings } from "./pages/Settings";
-import { useApp } from "./store/app";
+import { useApp, type Page } from "./store/app";
 import { applyWindowChrome } from "./lib/windowChrome";
 import { setWindowCaptionVisible } from "./lib/windowCaption";
 import { cn } from "./lib/cn";
 
 export function App() {
   const page = useApp((s) => s.page);
+  const [visitedPages, setVisitedPages] = useState(() => new Set<Page>([page]));
+  useEffect(() => {
+    setVisitedPages((visited) =>
+      visited.has(page) ? visited : new Set([...visited, page]),
+    );
+  }, [page]);
   const init = useApp((s) => s.init);
   const nowPlaying = useApp((s) => s.nowPlaying);
   const playerSurfaceCollapsed = useApp((s) => s.playerSurfaceCollapsed);
-  const player = useApp((s) => s.player);
+  const playerState = useApp((s) => s.player.state);
   const showTopBar = !nowPlaying || playerSurfaceCollapsed;
   const shellRef = useRef<HTMLDivElement | null>(null);
 
@@ -38,9 +44,9 @@ export function App() {
     if (!shell || !nowPlaying || playerSurfaceCollapsed) return;
 
     const chromePinned =
-      player.state === "loading" ||
-      player.state === "buffering" ||
-      player.state === "error";
+      playerState === "loading" ||
+      playerState === "buffering" ||
+      playerState === "error";
 
     const syncCaption = () => {
       setWindowCaptionVisible(chromePinned || shell.matches(":hover"));
@@ -57,7 +63,7 @@ export function App() {
       shell.removeEventListener("mousemove", syncCaption);
       setWindowCaptionVisible(true);
     };
-  }, [nowPlaying, playerSurfaceCollapsed, player.state]);
+  }, [nowPlaying, playerSurfaceCollapsed, playerState]);
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden">
@@ -87,25 +93,25 @@ export function App() {
             >
             <div className="relative h-full min-h-0 flex-1">
               <div className={cn(page !== "home" && "hidden", page === "home" && "h-full")}>
-                <Home />
+                {(page === "home" || visitedPages.has("home")) && <Home />}
               </div>
               <div className={cn(page !== "live" && "hidden", page === "live" && "h-full")}>
-                <LiveTV />
+                {(page === "live" || visitedPages.has("live")) && <LiveTV />}
               </div>
               <div className={cn(page !== "movies" && "hidden", page === "movies" && "h-full")}>
-                <Movies />
+                {(page === "movies" || visitedPages.has("movies")) && <Movies />}
               </div>
               <div className={cn(page !== "tv" && "hidden", page === "tv" && "h-full")}>
-                <TVShows />
+                {(page === "tv" || visitedPages.has("tv")) && <TVShows />}
               </div>
               <div className={cn(page !== "favorites" && "hidden", page === "favorites" && "h-full")}>
-                <Favorites />
+                {(page === "favorites" || visitedPages.has("favorites")) && <Favorites />}
               </div>
               <div className={cn(page !== "search" && "hidden", page === "search" && "h-full")}>
-                <Search />
+                {(page === "search" || visitedPages.has("search")) && <Search />}
               </div>
               <div className={cn(page !== "settings" && "hidden", page === "settings" && "h-full")}>
-                <Settings />
+                {(page === "settings" || visitedPages.has("settings")) && <Settings />}
               </div>
             </div>
             </div>

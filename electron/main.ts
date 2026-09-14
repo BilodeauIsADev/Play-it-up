@@ -728,12 +728,12 @@ function registerIpc(): void {
         }
       }
 
-      const xtreamLookups: Promise<void>[] = [];
+      const xtreamLookups: (() => Promise<void>)[] = [];
       for (const [epgId, channel] of byChannel) {
         const src = store.getSource(channel.sourceId);
         if (src?.kind === "xtream") {
           xtreamLookups.push(
-            (async () => {
+            async () => {
               const epg = await fetchXtreamShortEpg({
                 serverUrl: src.serverUrl,
                 username: src.username,
@@ -741,7 +741,7 @@ function registerIpc(): void {
                 streamId: channel.providerId,
               });
               if (epg) out[epgId] = epg;
-            })(),
+            },
           );
         }
       }
@@ -753,7 +753,7 @@ function registerIpc(): void {
           (async () => {
             while (queue.length) {
               const next = queue.shift();
-              if (next) await next;
+              if (next) await next();
             }
           })(),
         );

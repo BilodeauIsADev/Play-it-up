@@ -33,10 +33,9 @@ export function ChannelGrid({
   const ordered = useMemo(() => {
     if (channelSortMode === "none") return channels;
     const out = [...channels];
+    const collator = new Intl.Collator(undefined, { sensitivity: "base" });
     out.sort((a, b) => {
-      const cmp = a.name.localeCompare(b.name, undefined, {
-        sensitivity: "base",
-      });
+      const cmp = collator.compare(a.name, b.name);
       return channelSortMode === "name-desc" ? -cmp : cmp;
     });
     return out;

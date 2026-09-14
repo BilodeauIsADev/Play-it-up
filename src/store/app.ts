@@ -14,6 +14,8 @@ import { dispatchWebPlayerCommand } from "../lib/webPlayerCommands";
 import { enrichPlaybackChannel } from "../lib/mediaKind";
 import { computeBrowseFilters, EMPTY_BROWSE } from "../lib/browseFilters";
 
+const pendingEpg = new Set<string>();
+
 export type Page =
   | "home"
   | "live"
@@ -414,15 +416,20 @@ export const useApp = create<AppState>((set, get) => ({
   refreshEpgForVisible: async (channelIds) => {
     const known = get().epg;
     const fresh = Array.from(
-      new Set(channelIds.filter((id) => !(id in known))),
+      new Set(channelIds.filter((id) => !(id in known) && !pendingEpg.has(id))),
     );
     if (fresh.length === 0) return;
-    const epg = await bridge().invoke("epg:now", fresh);
-    // Record an entry (even if undefined) for every id we asked about so
-    // subsequent paginations don't re-query the provider for "no EPG".
-    const merge: Record<string, EpgEntry | undefined> = {};
-    for (const id of fresh) merge[id] = epg[id];
-    set((s) => ({ epg: { ...s.epg, ...merge } }));
+    for (const id of fresh) pendingEpg.add(id);
+    try {
+      const epg = await bridge().invoke("epg:now", fresh);
+      // Record an entry (even if undefined) for every id we asked about so
+      // subsequent paginations don't re-query the provider for "no EPG".
+      const merge: Record<string, EpgEntry | undefined> = {};
+      for (const id of fresh) merge[id] = epg[id];
+      set((s) => ({ epg: { ...s.epg, ...merge } }));
+    } finally {
+      for (const id of fresh) pendingEpg.delete(id);
+    }
   },
 
   play: async (channel) => {

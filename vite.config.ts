@@ -29,7 +29,7 @@ export default defineConfig({
             outDir: "dist-electron",
             sourcemap: true,
             rollupOptions: {
-              external: ["electron"],
+              external: ["electron", "koffi"],
               output: {
                 entryFileNames: "main.js",
                 format: "es",
