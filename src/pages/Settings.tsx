@@ -184,10 +184,10 @@ export function Settings() {
               </div>
               <p className="text-[11px] leading-relaxed text-text-muted">
                 {settings?.playbackMode === "web"
-                  ? "Uses Chromium's video engine with hls.js inside the app. Best first choice when embedded mpv has sound but no picture."
+                  ? "Uses Chromium with hls.js for HLS and mpegts.js for MPEG-TS. Best first choice for most playlists. Restart playback after changing this."
                   : settings?.playbackMode === "embedded"
-                    ? "mpv renders into an in-app native video panel. Keep this as a fallback if the browser player cannot decode a stream."
-                    : "mpv plays in its own native window as the broadest compatibility fallback. Restart playback for changes to take effect."}
+                    ? "mpv renders into an in-app native video panel (X11 / Windows). Restart playback after changing this."
+                    : "mpv plays in its own native window as the broadest compatibility fallback. Restart playback after changing this."}
               </p>
             </div>
           </Field>

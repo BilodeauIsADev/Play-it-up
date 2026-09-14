@@ -27,13 +27,27 @@ export class MpvController extends EventEmitter {
   private playerWindow: PlayerWindow | null = null;
   private status: PlayerStatus = { state: "idle" };
   private startingChannelId: string | undefined;
+  private embedded = false;
 
   constructor(private mainWindow: BrowserWindow) {
     super();
   }
 
   async ensureRunning(settings: AppSettings): Promise<void> {
-    if (this.proc && !this.proc.killed) return;
+    const wantsEmbed = settings.playbackMode === "embedded";
+    const supportsEmbed =
+      wantsEmbed &&
+      (process.platform === "win32" || process.platform === "linux");
+
+    if (this.proc && !this.proc.killed) {
+      if (this.embedded === supportsEmbed) return;
+      this.shutdown();
+    }
+
+    if (!supportsEmbed && this.playerWindow) {
+      this.playerWindow.destroy();
+      this.playerWindow = null;
+    }
 
     const probe = await probeMpv(settings.mpvPath);
     if (!probe.found || !probe.path) {
@@ -42,11 +56,6 @@ export class MpvController extends EventEmitter {
 
     // Embedded mpv uses a borderless child window as its native render target.
     // Browser playback never reaches this controller.
-    const wantsEmbed = settings.playbackMode === "embedded";
-    const supportsEmbed =
-      wantsEmbed &&
-      (process.platform === "win32" || process.platform === "linux");
-
     if (supportsEmbed && !this.playerWindow) {
       this.playerWindow = new PlayerWindow(this.mainWindow);
     }
@@ -56,7 +65,9 @@ export class MpvController extends EventEmitter {
     this.proc = spawn(probe.path, args, {
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
+      env: this.processEnv(supportsEmbed),
     });
+    this.embedded = supportsEmbed;
     this.proc.stdout?.on("data", (b) =>
       console.log("[mpv]", b.toString().trim()),
     );
@@ -83,8 +94,27 @@ export class MpvController extends EventEmitter {
     });
   }
 
+  private processEnv(embed: boolean): NodeJS.ProcessEnv {
+    const env = { ...process.env };
+    if (embed && process.platform === "linux") {
+      // mpv prefers Wayland when WAYLAND_DISPLAY is set and then ignores
+      // `--wid` (an X11 window id). Force the X11 path so video actually
+      // lands in the embed window.
+      delete env.WAYLAND_DISPLAY;
+      env.XDG_SESSION_TYPE = "x11";
+    }
+    return env;
+  }
+
   private buildArgs(settings: AppSettings, embed: boolean): string[] {
-    const args = [
+    const args: string[] = [];
+    if (embed) {
+      // Ignore ~/.config/mpv/mpv.conf — a user `gpu-context=wayland` or
+      // `vo=gpu-next` there is a common reason embed has sound and no picture.
+      args.push("--no-config");
+    }
+
+    args.push(
       `--input-ipc-server=${PIPE_NAME}`,
       "--idle=yes",
       "--force-window=yes",
@@ -93,11 +123,19 @@ export class MpvController extends EventEmitter {
       "--keep-open=yes",
       "--osd-level=1",
       `--volume=${settings.defaultVolume}`,
-    ];
-
-    args.push(
-      `--hwdec=${settings.hardwareDecoding === "auto" ? "auto-safe" : settings.hardwareDecoding}`,
     );
+
+    if (embed) {
+      // Copy-back hwdec: full interop (`auto-safe`) often fails to display
+      // inside a foreign window, which also presents as audio-only.
+      args.push(
+        `--hwdec=${settings.hardwareDecoding === "no" ? "no" : "auto-copy"}`,
+      );
+    } else {
+      args.push(
+        `--hwdec=${settings.hardwareDecoding === "auto" ? "auto-safe" : settings.hardwareDecoding}`,
+      );
+    }
     args.push(
       settings.cache === "no" ? "--cache=no" : "--cache=yes",
       "--cache-secs=10",
@@ -110,7 +148,12 @@ export class MpvController extends EventEmitter {
       // sole input surface.
       const wid = this.playerWindow.getNativeId();
       args.push(`--wid=${wid.toString()}`);
-      args.push("--osc=no", "--no-input-default-bindings");
+      args.push("--osc=no", "--no-input-default-bindings", "--input-vo-keyboard=no");
+      if (process.platform === "linux") {
+        args.push("--vo=gpu,x11", "--gpu-context=x11egl", "--gpu-api=opengl");
+      } else if (process.platform === "win32") {
+        args.push("--vo=gpu,direct3d");
+      }
     } else {
       // Own-window mode: keep mpv's polished OSC + key bindings since
       // the user is interacting with mpv's window directly. Make the
@@ -292,5 +335,6 @@ export class MpvController extends EventEmitter {
     this.proc = null;
     this.playerWindow?.destroy();
     this.playerWindow = null;
+    this.embedded = false;
   }
 }

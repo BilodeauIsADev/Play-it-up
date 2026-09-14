@@ -1,4 +1,5 @@
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 import { useEffect, useRef, type RefObject } from "react";
 import type { Channel } from "../../shared/types";
 import { isVodChannel } from "../lib/mediaKind";
@@ -18,8 +19,11 @@ type HlsNetworkErrorData = {
   };
 };
 
+type HlsPlayer = Hls;
+type MpegTsPlayer = ReturnType<typeof mpegts.createPlayer>;
+
 /**
- * Renders an HLS-capable HTML video player.
+ * Renders an HLS / MPEG-TS capable HTML video player.
  *
  * Aspect handling is deliberately CSS-first: the video element fills the
  * available player frame, and `object-fit: contain` makes Chromium letterbox
@@ -121,6 +125,76 @@ function mediaProxyUrl(url: string): string {
   return `playitup-media://fetch/${encoded}`;
 }
 
+function looksLikeHls(url: string): boolean {
+  return /\.m3u8(?:[?#]|$)/i.test(url);
+}
+
+function looksLikeMpegTs(url: string): boolean {
+  return /\.(?:ts|m2ts|mts)(?:[?#]|$)/i.test(url);
+}
+
+function looksLikeProgressive(url: string): boolean {
+  return /\.(?:mp4|m4v|webm|mov|mkv|mp3|aac|flac)(?:[?#]|$)/i.test(url);
+}
+
+function isHlsManifestError(details?: string): boolean {
+  return (
+    details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR ||
+    details === Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR
+  );
+}
+
+function createHlsEngine(isVod: boolean): Hls {
+  return new Hls({
+    enableWorker: true,
+    // IPTV HLS is almost never LL-HLS. Staying glued to the live edge
+    // with lowLatencyMode causes constant underruns / "buffering".
+    lowLatencyMode: false,
+    backBufferLength: isVod ? 30 : 12,
+    maxBufferLength: isVod ? 60 : 30,
+    maxMaxBufferLength: isVod ? 120 : 60,
+    maxBufferSize: 80 * 1000 * 1000,
+    maxBufferHole: 0.5,
+    liveSyncDurationCount: 4,
+    liveMaxLatencyDurationCount: 12,
+    liveDurationInfinity: !isVod,
+    maxLiveSyncPlaybackRate: 1,
+    startFragPrefetch: true,
+    testBandwidth: false,
+    manifestLoadingTimeOut: 15000,
+    manifestLoadingMaxRetry: 4,
+    levelLoadingTimeOut: 15000,
+    fragLoadingTimeOut: 20000,
+    fragLoadingMaxRetry: 6,
+    appendErrorMaxRetry: 5,
+  });
+}
+
+function createMpegTsEngine(
+  url: string,
+  isLive: boolean,
+): MpegTsPlayer {
+  return mpegts.createPlayer(
+    {
+      type: "mse",
+      isLive,
+      url,
+      cors: true,
+    },
+    {
+      enableWorker: true,
+      enableStashBuffer: true,
+      stashInitialSize: 1024 * 1024,
+      isLive,
+      liveBufferLatencyChasing: false,
+      liveSync: false,
+      lazyLoad: false,
+      reuseRedirectedURL: true,
+      referrerPolicy: "no-referrer",
+    },
+  );
+}
+
 export function WebVideoPlayer({
   channel,
   fullscreenContainerRef,
@@ -139,11 +213,16 @@ export function WebVideoPlayer({
     if (!video) return;
 
     const isVod = isVodChannel(channel);
-    let hls: Hls | null = null;
+    let hls: HlsPlayer | null = null;
+    let tsPlayer: MpegTsPlayer | null = null;
     let disposed = false;
     let startupTimer: number | undefined;
+    let waitingTimer: number | undefined;
+    let lastVodStatusAt = 0;
     let networkRecoveries = 0;
     let mediaRecoveries = 0;
+    let usedProxy = false;
+    let usedMpegTs = false;
 
     const setStatus = (
       state: Parameters<typeof setPlayerStatus>[0]["state"],
@@ -172,15 +251,114 @@ export function WebVideoPlayer({
       }
     };
 
-    const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
-    const looksLikeHls = /\.m3u8(?:[?#]|$)/i.test(channel.url);
-    const playbackUrl = looksLikeHls ? mediaProxyUrl(channel.url) : channel.url;
+    const destroyEngines = () => {
+      hls?.destroy();
+      hls = null;
+      try {
+        tsPlayer?.pause();
+        tsPlayer?.unload();
+        tsPlayer?.detachMediaElement();
+        tsPlayer?.destroy();
+      } catch {
+        /* engine already torn down */
+      }
+      tsPlayer = null;
+    };
 
-    const onPlaying = () => setStatus("playing");
-    const onWaiting = () => setStatus("buffering");
+    const startMpegTs = (url: string) => {
+      if (disposed || !mpegts.isSupported()) {
+        setStatus(
+          "error",
+          "This stream is MPEG-TS, which the browser player cannot decode.",
+        );
+        return;
+      }
+      usedMpegTs = true;
+      destroyEngines();
+      tsPlayer = createMpegTsEngine(url, !isVod);
+      tsPlayer.on(mpegts.Events.ERROR, (_type: string, detail: unknown) => {
+        const message =
+          detail && typeof detail === "object" && "msg" in detail
+            ? String((detail as { msg?: unknown }).msg)
+            : "MPEG-TS playback failed";
+        setStatus("error", message);
+      });
+      tsPlayer.attachMediaElement(video);
+      tsPlayer.load();
+      void play();
+    };
+
+    const startHls = (url: string) => {
+      if (disposed || !Hls.isSupported()) return;
+      destroyEngines();
+      networkRecoveries = 0;
+      mediaRecoveries = 0;
+      hls = createHlsEngine(isVod);
+      hls.attachMedia(video);
+      hls.loadSource(url);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        void play();
+      });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (!data.fatal) return;
+
+        if (isHlsManifestError(data.details) && !usedMpegTs) {
+          window.setTimeout(() => startMpegTs(channel.url), 0);
+          return;
+        }
+
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          if (isPermanentHttpFailure(data)) {
+            setStatus("error", hlsNetworkMessage(data));
+            return;
+          }
+          if (!usedProxy && !url.startsWith("playitup-media:")) {
+            usedProxy = true;
+            window.setTimeout(() => startHls(mediaProxyUrl(channel.url)), 0);
+            return;
+          }
+          if (networkRecoveries >= 2) {
+            setStatus("error", hlsNetworkMessage(data));
+            return;
+          }
+          networkRecoveries += 1;
+          hls?.startLoad();
+          return;
+        }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          if (mediaRecoveries >= 1) {
+            setStatus("error", data.error?.message ?? data.details);
+            return;
+          }
+          mediaRecoveries += 1;
+          hls?.recoverMediaError();
+          return;
+        }
+        setStatus("error", data.error?.message ?? data.details);
+      });
+    };
+
+    const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
+    const url = channel.url;
+
+    const onPlaying = () => {
+      if (waitingTimer !== undefined) {
+        window.clearTimeout(waitingTimer);
+        waitingTimer = undefined;
+      }
+      setStatus("playing");
+    };
+    const onWaiting = () => {
+      if (waitingTimer !== undefined) window.clearTimeout(waitingTimer);
+      waitingTimer = window.setTimeout(() => setStatus("buffering"), 400);
+    };
     const onPause = () => setStatus("paused");
     const onEnded = () => finishWebPlayback();
     const onTimeUpdate = () => {
+      if (!isVod) return;
+      const now = performance.now();
+      if (now - lastVodStatusAt < 250) return;
+      lastVodStatusAt = now;
       setStatus(video.paused ? "paused" : "playing");
     };
     const onSeeked = () => {
@@ -250,57 +428,31 @@ export function WebVideoPlayer({
     startupTimer = window.setTimeout(() => {
       if (disposed) return;
 
-      if (looksLikeHls && Hls.isSupported()) {
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: !isVod,
-          ...(isVod
-            ? {}
-            : {
-                liveSyncDurationCount: 2,
-                maxLiveSyncPlaybackRate: 1.5,
-              }),
-        });
-        hls.attachMedia(video);
-        hls.loadSource(playbackUrl);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          void play();
-        });
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (!data.fatal) return;
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            if (isPermanentHttpFailure(data)) {
-              setStatus("error", hlsNetworkMessage(data));
-              return;
-            }
-            if (networkRecoveries >= 2) {
-              setStatus("error", hlsNetworkMessage(data));
-              return;
-            }
-            networkRecoveries += 1;
-            hls?.startLoad();
-            return;
-          }
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            if (mediaRecoveries >= 1) {
-              setStatus("error", data.error?.message ?? data.details);
-              return;
-            }
-            mediaRecoveries += 1;
-            hls?.recoverMediaError();
-            return;
-          }
-          setStatus("error", data.error?.message ?? data.details);
-        });
-      } else if (looksLikeHls && canUseNative) {
-        video.src = playbackUrl;
+      if (looksLikeMpegTs(url) && mpegts.isSupported()) {
+        startMpegTs(url);
+        return;
+      }
+
+      if (looksLikeHls(url) && Hls.isSupported()) {
+        startHls(url);
+        return;
+      }
+
+      if (looksLikeHls(url) && canUseNative) {
+        video.src = url;
         video.addEventListener("loadedmetadata", () => void play(), {
           once: true,
         });
-      } else {
-        video.src = playbackUrl;
-        void play();
+        return;
       }
+
+      if (!looksLikeProgressive(url) && !isVod && Hls.isSupported()) {
+        startHls(url);
+        return;
+      }
+
+      video.src = url;
+      void play();
     }, 0);
 
     return () => {
@@ -316,7 +468,8 @@ export function WebVideoPlayer({
       video.removeEventListener("volumechange", onVolumeChange);
       video.removeEventListener("error", onError);
       if (startupTimer !== undefined) window.clearTimeout(startupTimer);
-      hls?.destroy();
+      if (waitingTimer !== undefined) window.clearTimeout(waitingTimer);
+      destroyEngines();
       video.pause();
       video.removeAttribute("src");
       video.load();

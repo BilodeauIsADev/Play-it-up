@@ -1,24 +1,29 @@
-import { BrowserWindow } from "electron";
+import { BaseWindow, type BrowserWindow } from "electron";
 
 /**
  * A bare native window used purely as a render target for mpv.
  *
- * On Windows / X11, mpv accepts `--wid=<hwnd>` and renders into that
- * native window. Electron's `BrowserWindow.getNativeWindowHandle()`
- * returns a Buffer containing the HWND/Window pointer; we read the
- * platform-specific size from it.
+ * This must NOT be a BrowserWindow. Chromium's compositor paints the
+ * BrowserWindow 60 times a second, covering whatever mpv draws via
+ * `--wid` — which is the usual "audio works, picture is black" failure.
+ * BaseWindow with no WebContents is just an HWND / X11 window, so mpv
+ * can parent its own video surface into it.
  *
- * On macOS, `--wid` is not supported by mpv (Cocoa requires libmpv's
- * render API). In that case we hide this window and let mpv open its
- * own window — degrading gracefully.
+ * On Windows / X11, mpv accepts `--wid=<hwnd>` and renders into a child
+ * of that native window. Electron's `getNativeWindowHandle()` returns a
+ * Buffer containing the HWND/Window pointer.
+ *
+ * On macOS, `--wid` is not supported by the mpv CLI (Cocoa requires
+ * libmpv's render API). In that case we hide this window and let mpv
+ * open its own window — degrading gracefully.
  */
 export class PlayerWindow {
-  readonly win: BrowserWindow;
+  readonly win: BaseWindow;
   private parentBounds = { x: 0, y: 0, width: 0, height: 0 };
   private visible = false;
 
   constructor(parent: BrowserWindow) {
-    this.win = new BrowserWindow({
+    this.win = new BaseWindow({
       parent,
       frame: false,
       transparent: false,
@@ -29,18 +34,13 @@ export class PlayerWindow {
       closable: false,
       hasShadow: false,
       focusable: false,
+      skipTaskbar: true,
       backgroundColor: "#000000",
       show: false,
-      acceptFirstMouse: true,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        offscreen: false,
-      },
+      autoHideMenuBar: true,
     });
 
     this.win.setMenuBarVisibility(false);
-    this.win.removeMenu?.();
 
     parent.on("move", () => this.refresh());
     parent.on("resize", () => this.refresh());

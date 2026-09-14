@@ -1,7 +1,13 @@
 # Build Windows (NSIS .exe) and Linux (AppImage), attach to a GitHub Release.
-# Create a release by pushing an annotated tag, e.g.:
-#   git tag -a v0.1.0 -m "0.1.0 Alpha"
-#   git push origin v0.1.0
+# Create a release by pushing an annotated tag. The tag message becomes the
+# GitHub release body (in-app changelog), e.g.:
+#   git tag -a v0.3.3 -m "$(cat <<'EOF'
+#   Play It Up 0.3.3
+#
+#   - Notable change
+#   EOF
+#   )"
+#   git push origin v0.3.3
 
 name: Release
 
@@ -85,18 +91,37 @@ jobs:
     needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
+      - name: Write release notes from tag annotation
+        run: |
+          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" \
+            | sed -e '${/^$/d;}' \
+            > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            printf '%s\n\n%s\n' \
+              "${GITHUB_REF_NAME}" \
+              "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${GITHUB_REF_NAME}" \
+              > release-notes.md
+          fi
+
       - name: Create GitHub Release (pre-release for 0.x)
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') || startsWith(github.ref_name, 'V0.') }}
-          generate_release_notes: true
+          generate_release_notes: false
+          body_path: release-notes.md
           files: |
             release-assets/*.exe
             release-assets/*.AppImage

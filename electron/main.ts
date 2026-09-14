@@ -29,6 +29,16 @@ import type {
 } from "../shared/types";
 import { WINDOW_CHROME } from "../shared/windowChrome";
 
+// Embedded mpv `--wid` needs an X11 window id. Prefer X11/XWayland unless
+// the user already chose an Ozone platform.
+if (
+  process.platform === "linux" &&
+  process.env.DISPLAY &&
+  !process.env.ELECTRON_OZONE_PLATFORM_HINT
+) {
+  app.commandLine.appendSwitch("ozone-platform-hint", "x11");
+}
+
 const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
 
 const ROOT = path.join(__dirname_, "..");
@@ -210,15 +220,17 @@ function installMediaCorsHeaders(): void {
       urls: ["http://*/*", "https://*/*"],
     },
     (details, callback) => {
-      const headers = details.responseHeaders ?? {};
-      callback({
-        responseHeaders: {
-          ...headers,
-          "Access-Control-Allow-Origin": ["*"],
-          "Access-Control-Allow-Headers": ["*"],
-          "Access-Control-Allow-Methods": ["GET, HEAD, OPTIONS"],
-        },
-      });
+      const headers = { ...(details.responseHeaders ?? {}) };
+      // Overwrite, don't append: duplicate ACAO values make Chromium
+      // reject the response and force every segment through the proxy.
+      setResponseHeader(headers, "Access-Control-Allow-Origin", "*");
+      setResponseHeader(headers, "Access-Control-Allow-Headers", "*");
+      setResponseHeader(
+        headers,
+        "Access-Control-Allow-Methods",
+        "GET, HEAD, OPTIONS",
+      );
+      callback({ responseHeaders: headers });
     },
   );
 }
@@ -376,9 +388,18 @@ function deleteHeader(
   if (hit) delete headers[hit];
 }
 
-function isLikelyMediaRequest(url: string, resourceType: string): boolean {
-  if (resourceType !== "xhr" && resourceType !== "media") return false;
+function setResponseHeader(
+  headers: Record<string, string | string[]>,
+  name: string,
+  value: string,
+): void {
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === name.toLowerCase()) delete headers[key];
+  }
+  headers[name] = [value];
+}
 
+function isMediaUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.toLowerCase();
@@ -386,11 +407,20 @@ function isLikelyMediaRequest(url: string, resourceType: string): boolean {
       path.includes("/live/") ||
       path.includes("/movie/") ||
       path.includes("/series/") ||
-      /\.(?:m3u8|ts|m4s|mp4|mkv|aac|key)$/.test(path)
+      /\.(?:m3u8|ts|m2ts|mts|m4s|mp4|mkv|aac|key)$/.test(path)
     );
   } catch {
     return false;
   }
+}
+
+function isLikelyMediaRequest(url: string, resourceType: string): boolean {
+  if (!isMediaUrl(url)) return false;
+  return (
+    resourceType === "xhr" ||
+    resourceType === "media" ||
+    resourceType === "other"
+  );
 }
 
 function broadcastSourcesChanged(): void {
@@ -778,7 +808,20 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("settings:get", () => store.getSettings());
-  ipcMain.handle("settings:set", (_, patch) => store.setSettings(patch));
+  ipcMain.handle("settings:set", (_, patch) => {
+    const prev = store.getSettings();
+    const next = store.setSettings(patch);
+    const restartMpv =
+      (patch.playbackMode !== undefined &&
+        patch.playbackMode !== prev.playbackMode) ||
+      (patch.hardwareDecoding !== undefined &&
+        patch.hardwareDecoding !== prev.hardwareDecoding) ||
+      (patch.mpvPath !== undefined && patch.mpvPath !== prev.mpvPath) ||
+      (patch.cache !== undefined && patch.cache !== prev.cache) ||
+      patch.extraArgs !== undefined;
+    if (restartMpv) mpv?.shutdown();
+    return next;
+  });
   ipcMain.handle("mpv:probe", () => probeMpv(store.getSettings().mpvPath));
 
   ipcMain.handle("mpv:pickBinary", async () => {
